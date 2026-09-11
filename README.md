@@ -53,13 +53,13 @@ Argumente wie bei `xfreerdp` (P1), vorhandene Aufrufe laufen weiter:
 
 ```sh
 # voller Desktop im Vollbild, Windows rendert mit 175 %
-bin/rdp-retina /v:192.168.6.46 /u:Administrator /f /scale:180 /gfx:AVC444 /network:lan
+bin/rdp-retina /v:192.168.0.0 /u:Administrator /f /scale:180 /gfx:AVC444 /network:lan
 
 # Fenster, das die Sitzungsgröße bestimmt
-bin/rdp-retina /v:192.168.6.46 /u:Administrator /dynamic-resolution /scale-desktop:200
+bin/rdp-retina /v:192.168.0.0  /u:Administrator /dynamic-resolution /scale-desktop:200
 
 # RemoteApp, auf Wunsch über alle Bildschirme
-bin/rdp-retina /v:192.168.6.46 /u:Administrator '/app:program:||taskmgr' /multimon
+bin/rdp-retina /v:192.168.0.0  /u:Administrator '/app:program:||taskmgr' /multimon
 ```
 
 Was der Client selbst festlegt:
