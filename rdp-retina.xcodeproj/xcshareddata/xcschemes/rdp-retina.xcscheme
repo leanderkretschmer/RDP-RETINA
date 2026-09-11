@@ -42,12 +42,12 @@
       <BuildableProductRunnable
          runnableDebuggingMode = "0">
          <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "14F588AEA56767926571F87F"
-               BuildableName = "rdp-retina.app"
-               BlueprintName = "rdp-retina"
-               ReferencedContainer = "container:rdp-retina.xcodeproj">
-            </BuildableReference>
+            BuildableIdentifier = "primary"
+            BlueprintIdentifier = "14F588AEA56767926571F87F"
+            BuildableName = "rdp-retina.app"
+            BlueprintName = "rdp-retina"
+            ReferencedContainer = "container:rdp-retina.xcodeproj">
+         </BuildableReference>
       </BuildableProductRunnable>
       <CommandLineArguments>
          <CommandLineArgument
@@ -93,12 +93,12 @@
       <BuildableProductRunnable
          runnableDebuggingMode = "0">
          <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "14F588AEA56767926571F87F"
-               BuildableName = "rdp-retina.app"
-               BlueprintName = "rdp-retina"
-               ReferencedContainer = "container:rdp-retina.xcodeproj">
-            </BuildableReference>
+            BuildableIdentifier = "primary"
+            BlueprintIdentifier = "14F588AEA56767926571F87F"
+            BuildableName = "rdp-retina.app"
+            BlueprintName = "rdp-retina"
+            ReferencedContainer = "container:rdp-retina.xcodeproj">
+         </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>
    <AnalyzeAction
