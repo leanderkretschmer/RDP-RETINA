@@ -39,10 +39,14 @@ struct rr_context
 	size_t optionCount;
 	BOOL sizeGiven;
 	BOOL gfxGiven;
+	BOOL reconnectGiven;
 
 	rrScreen screens[RR_MAX_SCREENS];
 	UINT32 screenCount;
 	rrScreen primary;
+	BOOL multimon;
+	INT32 originX; /* linke obere Ecke der Sitzung relativ zum primären Bildschirm */
+	INT32 originY;
 
 	/* Kanäle */
 	RailClientContext* rail;

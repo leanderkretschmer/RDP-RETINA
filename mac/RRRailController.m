@@ -370,9 +370,12 @@ typedef struct
 	}
 	else
 	{
+		INT32 originX = 0;
+		INT32 originY = 0;
+		rr_desktop_origin(_rr, &originX, &originY);
 		view.texture = _session.desktopTexture;
-		view.textureOriginX = entry.rect.x;
-		view.textureOriginY = entry.rect.y;
+		view.textureOriginX = entry.rect.x - originX;
+		view.textureOriginY = entry.rect.y - originY;
 		view.alpha = NO;
 	}
 	[view setNeedsRender];
@@ -678,9 +681,14 @@ typedef struct
 	_move.y = y;
 	_move.start = entry.rect;
 
-	/* Maustaste schon los, bevor die Antwort des Servers kam */
+	/* Maustaste schon los, bevor die Antwort des Servers kam: sofort beenden, Lage bleibt. */
 	if ((NSEvent.pressedMouseButtons & 1) == 0)
-		[self finishLocalMove];
+	{
+		const NSPoint cursor = [_session serverPointFromScreenPoint:NSEvent.mouseLocation];
+		const rrRect rect = entry.rect;
+		_move.active = NO;
+		(void)rr_rail_end_local_move(_rr, windowId, &rect, (INT32)cursor.x, (INT32)cursor.y, NO);
+	}
 }
 
 - (rrRect)localMoveRectForCursor:(NSPoint)cursor

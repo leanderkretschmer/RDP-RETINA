@@ -6,9 +6,12 @@
  * Prüf-Client) bekommt fertige Ereignisse über rrFrontend und ruft für Eingaben und
  * Fensterbefehle die rr_*-Funktionen auf.
  *
- * Koordinaten sind durchgehend Server-Pixel: Ursprung oben links am primären Bildschirm,
- * y wächst nach unten. Punkte im Sinne von macOS kennt der Kern nicht – die Umrechnung
- * ist Sache der Oberfläche, und genau dort darf nicht skaliert werden.
+ * Koordinaten sind durchgehend Server-Pixel im virtuellen Bildschirm von Windows: Ursprung
+ * oben links am primären Bildschirm, y wächst nach unten (RemoteApp-Fenster, Bildschirme,
+ * Mausereignisse). Einzige Ausnahme ist der Desktoppuffer: Er beginnt an der linken oberen
+ * Ecke aller Bildschirme, bei /multimon also um rr_desktop_origin() verschoben.
+ * Punkte im Sinne von macOS kennt der Kern nicht – die Umrechnung ist Sache der
+ * Oberfläche, und genau dort darf nicht skaliert werden.
  */
 #ifndef RR_CORE_H
 #define RR_CORE_H
@@ -180,6 +183,11 @@ extern "C"
 
 	BOOL rr_start(rrContext* rr);
 	void rr_stop(rrContext* rr);
+
+	/* W3 (/multimon): Sitzung über mehrere Bildschirme. Die linke obere Ecke des
+	 * Desktoppuffers relativ zum primären Bildschirm; ohne /multimon (0, 0). */
+	BOOL rr_multimon(rrContext* rr);
+	void rr_desktop_origin(rrContext* rr, INT32* x, INT32* y);
 
 	/* ---- Eingabe (aus jedem Thread) -------------------------------------------------- */
 

@@ -4,6 +4,10 @@
  * Ein Fenster, dessen Inhalt in Punkten genau Sitzungspixel / backingScaleFactor groß ist.
  * P3: Mit /dynamic-resolution bestimmt das Fenster die Sitzung (Größenmeldung an den
  * Server), ohne ist das Fenster auf die Sitzungsgröße festgelegt. Umgerechnet wird nie.
+ *
+ * W3: /f /multimon verteilt die Sitzung auf alle Bildschirme – je Bildschirm ein randloses
+ * Fenster, das seinen Ausschnitt des gemeinsamen Desktoppuffers zeigt. Der Puffer beginnt
+ * an der linken oberen Ecke aller Bildschirme (gemessen, siehe README).
  */
 #import "RRDesktopController.h"
 #import "RRKeyboard.h"
@@ -41,12 +45,15 @@ const NSWindowStyleMask RRDesktopWindowStyle = NSWindowStyleMaskTitled | NSWindo
 @end
 
 @interface RRDesktopController () <NSWindowDelegate, RRMetalViewInput>
+/* Einmal vor dem Verbinden gesetzt, danach nur gelesen (auch aus dem RDP-Thread) */
+@property (atomic, copy) NSArray<RRMetalView *> *views;
+@property (atomic, copy) NSArray<RRDesktopWindow *> *windows;
 @end
 
 @implementation RRDesktopController
 {
 	__weak RRSession *_session;
-	RRDesktopWindow *_window;
+	RRDesktopWindow *_window; /* Hauptfenster (primärer Bildschirm) */
 	RRMetalView *_view;
 	NSTimer *_resizeTimer;
 	BOOL _fullscreen;
@@ -57,7 +64,11 @@ const NSWindowStyleMask RRDesktopWindowStyle = NSWindowStyleMaskTitled | NSWindo
 {
 	self = [super init];
 	if (self)
+	{
 		_session = session;
+		_views = @[];
+		_windows = @[];
+	}
 	return self;
 }
 
@@ -72,9 +83,52 @@ const NSWindowStyleMask RRDesktopWindowStyle = NSWindowStyleMaskTitled | NSWindo
 	return [NSString stringWithFormat:@"%s – rdp-retina", host ? host : "?"];
 }
 
+- (RRDesktopWindow *)newWindowWithContentRect:(NSRect)contentRect
+                                    styleMask:(NSWindowStyleMask)style
+                                       screen:(NSScreen *)screen
+{
+	RRDesktopWindow *window = [[RRDesktopWindow alloc] initWithContentRect:contentRect
+	                                                             styleMask:style
+	                                                               backing:NSBackingStoreBuffered
+	                                                                 defer:NO
+	                                                                screen:screen];
+	window.releasedWhenClosed = NO;
+	window.delegate = self;
+	window.acceptsMouseMovedEvents = YES;
+	window.backgroundColor = NSColor.blackColor;
+	window.title = [self windowTitle];
+	return window;
+}
+
+- (RRMetalView *)newViewWithSize:(NSSize)size
+{
+	RRSession *session = _session;
+	RRMetalView *view = [[RRMetalView alloc] initWithFrame:NSMakeRect(0, 0, size.width, size.height)
+	                                              renderer:session.renderer];
+	view.input = self;
+	view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+	view.texture = session.desktopTexture;
+	return view;
+}
+
+- (void)activate
+{
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+	[NSApp activateIgnoringOtherApps:YES];
+#pragma clang diagnostic pop
+}
+
 - (void)showWithPixelSize:(NSSize)pixels fullscreen:(BOOL)fullscreen
 {
 	RRSession *session = _session;
+
+	if (fullscreen && rr_multimon(session.rr))
+	{
+		[self showAcrossScreens];
+		return;
+	}
+
 	NSScreen *screen = session.primaryScreen;
 	const CGFloat scale = screen.backingScaleFactor;
 
@@ -93,30 +147,14 @@ const NSWindowStyleMask RRDesktopWindowStyle = NSWindowStyleMaskTitled | NSWindo
 	else if (!_dynamic)
 		style &= ~NSWindowStyleMaskResizable;
 
-	_window = [[RRDesktopWindow alloc] initWithContentRect:contentRect
-	                                             styleMask:style
-	                                               backing:NSBackingStoreBuffered
-	                                                 defer:NO
-	                                                screen:screen];
-	_window.releasedWhenClosed = NO;
-	_window.delegate = self;
-	_window.acceptsMouseMovedEvents = YES;
-	_window.backgroundColor = NSColor.blackColor;
-	_window.title = [self windowTitle];
-
-	_view = [[RRMetalView alloc] initWithFrame:NSMakeRect(0, 0, contentRect.size.width,
-	                                                      contentRect.size.height)
-	                                  renderer:session.renderer];
-	_view.input = self;
-	_view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
-	_view.texture = session.desktopTexture;
+	_window = [self newWindowWithContentRect:contentRect styleMask:style screen:screen];
+	_view = [self newViewWithSize:contentRect.size];
 	_window.contentView = _view;
 	[_window makeFirstResponder:_view];
+	self.windows = @[ _window ];
+	self.views = @[ _view ];
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-	[NSApp activateIgnoringOtherApps:YES];
-#pragma clang diagnostic pop
+	[self activate];
 
 	if (fullscreen)
 	{
@@ -138,9 +176,66 @@ const NSWindowStyleMask RRDesktopWindowStyle = NSWindowStyleMaskTitled | NSWindo
 	[_window makeKeyAndOrderFront:nil];
 }
 
+- (void)showAcrossScreens
+{
+	RRSession *session = _session;
+	const NSRect primary = session.primaryScreen.frame;
+	const CGFloat scale = session.scale;
+	INT32 originX = 0;
+	INT32 originY = 0;
+	rr_desktop_origin(session.rr, &originX, &originY);
+
+	_fullscreen = YES;
+	_dynamic = NO;
+
+	NSMutableArray<RRDesktopWindow *> *windows = [NSMutableArray new];
+	NSMutableArray<RRMetalView *> *views = [NSMutableArray new];
+
+	for (NSScreen *screen in NSScreen.screens)
+	{
+		const NSRect frame = screen.frame;
+		RRDesktopWindow *window = [self newWindowWithContentRect:frame
+		                                               styleMask:NSWindowStyleMaskBorderless
+		                                                  screen:screen];
+		RRMetalView *view = [self newViewWithSize:frame.size];
+
+		/* Lage im virtuellen Bildschirm (primärer bei 0,0); der Puffer beginnt an der linken
+		 * oberen Ecke aller Bildschirme. Eingaben verschiebt der Kern selbst. */
+		const NSInteger x = lround((frame.origin.x - primary.origin.x) * scale);
+		const NSInteger y = lround((NSMaxY(primary) - NSMaxY(frame)) * scale);
+		view.textureOriginX = x - originX;
+		view.textureOriginY = y - originY;
+		view.serverOriginX = x;
+		view.serverOriginY = y;
+
+		window.contentView = view;
+		[window makeFirstResponder:view];
+		[window setFrame:frame display:NO];
+
+		if (screen == session.primaryScreen)
+		{
+			_window = window;
+			_view = view;
+		}
+		[windows addObject:window];
+		[views addObject:view];
+	}
+
+	self.windows = windows;
+	self.views = views;
+
+	[self activate];
+	NSApp.presentationOptions =
+	    NSApplicationPresentationHideDock | NSApplicationPresentationHideMenuBar;
+	for (RRDesktopWindow *window in windows)
+		[window orderFront:nil];
+	[_window makeKeyAndOrderFront:nil];
+}
+
 - (void)desktopResized:(NSSize)pixels texture:(RRTexture *)texture
 {
-	_view.texture = texture;
+	for (RRMetalView *view in self.views)
+		view.texture = texture;
 
 	if (_window && !_fullscreen && !_dynamic)
 	{
@@ -150,40 +245,52 @@ const NSWindowStyleMask RRDesktopWindowStyle = NSWindowStyleMaskTitled | NSWindo
 		_window.contentMaxSize = points;
 		[_window setContentSize:points];
 	}
-	[_view setNeedsRender];
+
+	for (RRMetalView *view in self.views)
+		[view setNeedsRender];
 }
 
 - (void)desktopUpdated
 {
-	[_view setNeedsRender];
+	for (RRMetalView *view in self.views)
+		[view setNeedsRender];
 }
 
 - (void)cursorChanged
 {
-	if (!_window)
-		return;
+	NSCursor *cursor = _session.cursor;
+	const NSPoint mouse = NSEvent.mouseLocation;
 
-	[_window invalidateCursorRectsForView:_view];
-	const NSPoint location = [_view convertPoint:_window.mouseLocationOutsideOfEventStream
-	                                    fromView:nil];
-	if (_window.isKeyWindow && NSPointInRect(location, _view.bounds))
-		[_session.cursor set];
+	for (RRDesktopWindow *window in self.windows)
+	{
+		[window invalidateCursorRectsForView:window.contentView];
+		if (NSApp.isActive && NSPointInRect(mouse, window.frame))
+			[cursor set];
+	}
 }
 
 - (void)close
 {
 	[_resizeTimer invalidate];
 	_resizeTimer = nil;
-	_window.delegate = nil;
-	[_window close];
+	for (RRDesktopWindow *window in self.windows)
+	{
+		window.delegate = nil;
+		[window close];
+	}
 }
 
 - (void)runSelfTest
 {
-	[_view verifyPixelExact:^(NSString *report, BOOL exact) {
-		fprintf(stderr, "rdp-retina: Selbsttest Desktop %s – %s\n", exact ? "1:1" : "NICHT 1:1",
-		        report.UTF8String);
-	}];
+	NSUInteger index = 0;
+	for (RRMetalView *view in self.views)
+	{
+		const NSUInteger number = ++index;
+		[view verifyPixelExact:^(NSString *report, BOOL exact) {
+			fprintf(stderr, "rdp-retina: Selbsttest Desktop %lu %s – %s\n", (unsigned long)number,
+			        exact ? "1:1" : "NICHT 1:1", report.UTF8String);
+		}];
+	}
 }
 
 /* ---- Größe (P3) ------------------------------------------------------------------------ */
@@ -283,7 +390,7 @@ const NSWindowStyleMask RRDesktopWindowStyle = NSWindowStyleMaskTitled | NSWindo
 
 - (void)metalViewDidChangeBacking:(RRMetalView *)view
 {
-	if (!_dynamic && (fabs(_window.backingScaleFactor - _session.scale) > 0.01))
+	if (!_dynamic && (fabs(view.window.backingScaleFactor - _session.scale) > 0.01))
 		fprintf(stderr, "rdp-retina: Fenster auf Bildschirm mit anderem Faktor – ohne "
 		                "/dynamic-resolution wird beschnitten, nicht skaliert\n");
 }

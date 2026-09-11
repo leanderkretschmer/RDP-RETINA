@@ -74,6 +74,8 @@ BOOL rr_settings_parse(rrContext* rr, int argc, char** argv, int* exitCode)
 				rr->sizeGiven = TRUE;
 			if (rr_arg_is(arg, "gfx") || rr_arg_is(arg, "rfx"))
 				rr->gfxGiven = TRUE;
+			if (rr_arg_is(arg, "auto-reconnect"))
+				rr->reconnectGiven = TRUE;
 		}
 		args[count++] = argv[i];
 	}
@@ -102,6 +104,19 @@ void rr_settings_free(rrContext* rr)
 	free(rr->options);
 	rr->options = NULL;
 	rr->optionCount = 0;
+}
+
+BOOL rr_multimon(rrContext* rr)
+{
+	return rr->multimon;
+}
+
+void rr_desktop_origin(rrContext* rr, INT32* x, INT32* y)
+{
+	if (x)
+		*x = rr->originX;
+	if (y)
+		*y = rr->originY;
 }
 
 const char* rr_option(rrContext* rr, const char* name)
@@ -210,8 +225,61 @@ BOOL rr_configure(rrContext* rr, const rrScreen* screens, UINT32 count, UINT32 d
 		origin = "nutzbare Fläche";
 	}
 
-	const UINT32 sessionWidth = rr_session_dimension(width);
-	const UINT32 sessionHeight = rr_session_dimension(height);
+	/* W3: mit /multimon alle Bildschirme (nur Vollbild und RemoteApp). */
+	rr->multimon = FALSE;
+	rr->originX = 0;
+	rr->originY = 0;
+	if (freerdp_settings_get_bool(settings, FreeRDP_UseMultimon) && (count > 1) &&
+	    (remoteApp || freerdp_settings_get_bool(settings, FreeRDP_Fullscreen)))
+	{
+		const UINT64 overrideFlags =
+		    freerdp_settings_get_uint64(settings, FreeRDP_MonitorOverrideFlags);
+		rdpMonitor monitors[RR_MAX_SCREENS] = { 0 };
+		INT64 left = INT32_MAX;
+		INT64 top = INT32_MAX;
+		INT64 right = INT32_MIN;
+		INT64 bottom = INT32_MIN;
+
+		for (UINT32 i = 0; i < count; i++)
+		{
+			const rrScreen* s = &rr->screens[i];
+			rdpMonitor* m = &monitors[i];
+			UINT32 scale = MIN(MAX(s->scalePercent, 100u), 500u);
+			if (overrideFlags & FREERDP_MONITOR_OVERRIDE_DESKTOP_SCALE)
+				scale = freerdp_settings_get_uint32(settings, FreeRDP_DesktopScaleFactor);
+
+			m->x = s->frame.x;
+			m->y = s->frame.y;
+			m->width = (INT32)s->frame.width;
+			m->height = (INT32)s->frame.height;
+			m->is_primary = s->primary ? 1 : 0;
+			m->orig_screen = i;
+			m->attributes.physicalWidth = s->physicalWidthMm;
+			m->attributes.physicalHeight = s->physicalHeightMm;
+			m->attributes.orientation = ORIENTATION_LANDSCAPE;
+			m->attributes.desktopScaleFactor = scale;
+			m->attributes.deviceScaleFactor = rr_device_scale(scale);
+
+			left = MIN(left, (INT64)s->frame.x);
+			top = MIN(top, (INT64)s->frame.y);
+			right = MAX(right, (INT64)s->frame.x + s->frame.width);
+			bottom = MAX(bottom, (INT64)s->frame.y + s->frame.height);
+		}
+
+		if (!freerdp_settings_set_monitor_def_array_sorted(settings, monitors, count))
+			return FALSE;
+
+		rr->multimon = TRUE;
+		rr->originX = (INT32)left;
+		rr->originY = (INT32)top;
+		width = (UINT32)(right - left);
+		height = (UINT32)(bottom - top);
+		origin = "alle Bildschirme";
+	}
+
+	const UINT32 sessionWidth = rr->multimon ? (MIN(width, 32766u) & ~1u) : rr_session_dimension(width);
+	const UINT32 sessionHeight =
+	    rr->multimon ? (MIN(height, 32766u) & ~1u) : rr_session_dimension(height);
 	if ((sessionWidth != width) || (sessionHeight != height))
 		WLog_Print(rr->log, WLOG_WARN,
 		           "Sitzungsgröße %" PRIu32 "x%" PRIu32 " auf %" PRIu32 "x%" PRIu32 " angepasst",
@@ -267,6 +335,11 @@ BOOL rr_configure(rrContext* rr, const rrScreen* screens, UINT32 count, UINT32 d
 	else if (!freerdp_settings_get_bool(settings, FreeRDP_GfxAVC444))
 		WLog_Print(rr->log, WLOG_WARN,
 		           "ohne /gfx:AVC444 wird farbiges Text-Antialiasing unscharf übertragen");
+
+	/* W4: nach einer Netzunterbrechung neu verbinden, sofern nicht ausdrücklich abgeschaltet */
+	if (!rr->reconnectGiven &&
+	    !freerdp_settings_set_bool(settings, FreeRDP_AutoReconnectionEnabled, TRUE))
+		return FALSE;
 
 	if (remoteApp)
 	{

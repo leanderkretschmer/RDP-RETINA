@@ -17,7 +17,7 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 VERSION=${FREERDP_VERSION:-3.31.1}
 WORK=${WORK:-$ROOT/build/freerdp-src}
-PREFIX="$ROOT/vendor/freerdp"
+PREFIX=${PREFIX:-$ROOT/vendor/freerdp}
 BREW=$(brew --prefix)
 
 [ -d "$WORK" ] || git clone --depth 1 --branch "$VERSION" https://github.com/FreeRDP/FreeRDP.git "$WORK"

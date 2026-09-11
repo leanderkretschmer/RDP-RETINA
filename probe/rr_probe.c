@@ -780,6 +780,21 @@ static BOOL run_step(Probe* p, const Step* step)
 			return TRUE;
 		(void)rr_rail_activate(p->rr, w.id, TRUE);
 	}
+	else if ((strcmp(step->action, "klick") == 0) || (strcmp(step->action, "rklick") == 0))
+	{
+		/* Klick an einer festen Stelle des Desktoppuffers: klick X,Y */
+		int x = 0;
+		int y = 0;
+		if (sscanf(step->args, "%d,%d", &x, &y) == 2)
+		{
+			const UINT32 button = (step->action[0] == 'r') ? 1 : 0;
+			(void)rr_mouse_move(p->rr, x, y);
+			Sleep(30);
+			(void)rr_mouse_button(p->rr, button, TRUE, x, y);
+			Sleep(60);
+			(void)rr_mouse_button(p->rr, button, FALSE, x, y);
+		}
+	}
 	else if (strcmp(step->action, "key") == 0)
 	{
 		const UINT32 scancode = (UINT32)strtoul(sel, NULL, 16);
@@ -928,7 +943,36 @@ int main(int argc, char* argv[])
 		free(text);
 	}
 
-	if (!rr_configure(p->rr, &screen, 1, 0, 0))
+	/* Zweiter Bildschirm für W3, Lage in Server-Pixeln relativ zum primären:
+	 * /probe-screen2:2560x1440@100+-2560+0 */
+	rrScreen screens[2];
+	memset(screens, 0, sizeof(screens));
+	screens[0] = screen;
+	UINT32 screenCount = 1;
+	option = rr_option(p->rr, "probe-screen2");
+	if (option)
+	{
+		unsigned w2 = 0;
+		unsigned h2 = 0;
+		unsigned scale2 = 100;
+		int x2 = 0;
+		int y2 = 0;
+		if (sscanf(option, "%ux%u@%u+%d+%d", &w2, &h2, &scale2, &x2, &y2) == 5)
+		{
+			rrScreen* s2 = &screens[1];
+			s2->frame.x = x2;
+			s2->frame.y = y2;
+			s2->frame.width = w2;
+			s2->frame.height = h2;
+			s2->workArea = s2->frame;
+			s2->physicalWidthMm = 300;
+			s2->physicalHeightMm = 190;
+			s2->scalePercent = scale2;
+			screenCount = 2;
+		}
+	}
+
+	if (!rr_configure(p->rr, screens, screenCount, 0, 0))
 	{
 		fprintf(stderr, "Konfiguration fehlgeschlagen\n");
 		rr_free(p->rr);

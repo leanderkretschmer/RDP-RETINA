@@ -610,8 +610,13 @@ static UINT rr_rail_exec(rrContext* rr)
 	if (rc != CHANNEL_RC_OK)
 		return rc;
 
-	/* Arbeitsbereich ohne Menüleiste und Dock, damit Maximieren passt. */
-	if ((rr->primary.workArea.width > 0) && (rr->primary.workArea.height > 0))
+	/* Arbeitsbereiche ohne Menüleiste und Dock, damit Maximieren passt – je Bildschirm. */
+	if (rr->multimon)
+	{
+		for (UINT32 i = 0; i < rr->screenCount; i++)
+			(void)rr_rail_work_area(rr, &rr->screens[i].workArea);
+	}
+	else if ((rr->primary.workArea.width > 0) && (rr->primary.workArea.height > 0))
 		(void)rr_rail_work_area(rr, &rr->primary.workArea);
 	return CHANNEL_RC_OK;
 }
@@ -955,8 +960,7 @@ BOOL rr_rail_end_local_move(rrContext* rr, UINT32 windowId, const rrRect* rect, 
 		return FALSE;
 	if (keyboard)
 		return TRUE;
-	return freerdp_client_send_button_event(&rr->common, FALSE, PTR_FLAGS_BUTTON1, cursorX,
-	                                        cursorY);
+	return rr_mouse_button(rr, 0, FALSE, cursorX, cursorY);
 }
 
 BOOL rr_rail_system_menu(rrContext* rr, UINT32 windowId, INT32 x, INT32 y)
@@ -977,16 +981,17 @@ BOOL rr_rail_work_area(rrContext* rr, const rrRect* area)
 	if (!rail || !rail->ClientSystemParam || !area)
 		return FALSE;
 
+	/* Bildschirme links oder oberhalb des primären haben negative Koordinaten; das Feld ist
+	 * vorzeichenlos, der Server liest es als INT16. */
 	RAIL_SYSPARAM_ORDER order = { 0 };
 	order.params = SPI_MASK_SET_WORK_AREA;
-	order.workArea.left = (UINT16)MIN(MAX(area->x, 0), 0xFFFF);
-	order.workArea.top = (UINT16)MIN(MAX(area->y, 0), 0xFFFF);
-	order.workArea.right = (UINT16)MIN((INT64)area->x + area->width, 0xFFFF);
-	order.workArea.bottom = (UINT16)MIN((INT64)area->y + area->height, 0xFFFF);
+	order.workArea.left = (UINT16)rr_int16(area->x);
+	order.workArea.top = (UINT16)rr_int16(area->y);
+	order.workArea.right = (UINT16)rr_int16((INT64)area->x + area->width);
+	order.workArea.bottom = (UINT16)rr_int16((INT64)area->y + area->height);
 
-	WLog_Print(rr->log, WLOG_DEBUG, "Arbeitsbereich %" PRIu16 ",%" PRIu16 " - %" PRIu16 ",%" PRIu16,
-	           order.workArea.left, order.workArea.top, order.workArea.right,
-	           order.workArea.bottom);
+	WLog_Print(rr->log, WLOG_DEBUG, "Arbeitsbereich %" PRId32 ",%" PRId32 " %" PRIu32 "x%" PRIu32,
+	           area->x, area->y, area->width, area->height);
 	return rail->ClientSystemParam(rail, &order) == CHANNEL_RC_OK;
 }
 

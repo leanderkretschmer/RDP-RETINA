@@ -11,15 +11,18 @@
 
 #include "rr_private.h"
 
-/* Außerhalb der Sitzung bräche der Server die Koordinate als UINT16 um. */
+/* Die Schnittstelle rechnet im virtuellen Bildschirm (primärer bei 0,0), der Server erwartet
+ * Eingaben relativ zur linken oberen Ecke der Sitzung – bei /multimon ist das ein Unterschied
+ * (gemessen: Rechtsklick auf den Desktop öffnet das Menü an der Pufferkoordinate).
+ * Außerhalb der Sitzung bräche der Server die Koordinate als UINT16 um. */
 static void rr_clamp_point(rrContext* rr, INT32* x, INT32* y)
 {
 	const rdpSettings* settings = rr->common.context.settings;
 	const INT32 width = (INT32)freerdp_settings_get_uint32(settings, FreeRDP_DesktopWidth);
 	const INT32 height = (INT32)freerdp_settings_get_uint32(settings, FreeRDP_DesktopHeight);
 
-	*x = MIN(MAX(*x, 0), MAX(width - 1, 0));
-	*y = MIN(MAX(*y, 0), MAX(height - 1, 0));
+	*x = MIN(MAX(*x - rr->originX, 0), MAX(width - 1, 0));
+	*y = MIN(MAX(*y - rr->originY, 0), MAX(height - 1, 0));
 }
 
 BOOL rr_mouse_move(rrContext* rr, INT32 x, INT32 y)
