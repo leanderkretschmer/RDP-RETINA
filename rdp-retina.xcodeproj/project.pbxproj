@@ -25,6 +25,7 @@
 		A5DA60F7660737DFCBEF8FCD /* RRSession.m in Sources */ = {isa = PBXBuildFile; fileRef = DAB3C73E6C9FB2B52EACD8C4 /* RRSession.m */; };
 		BF04E654BAACDD6D653A7472 /* RRTray.m in Sources */ = {isa = PBXBuildFile; fileRef = B60FD94DD60343A0EB0C284E /* RRTray.m */; };
 		F55E7AFD8989209CEC8AC49A /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 46051C27F61C6A9848E80800 /* main.m */; };
+		8C8CE326555DFE4769A8D7F4 /* RDP-Retina.icon in Resources */ = {isa = PBXBuildFile; fileRef = 67CBCBB72908B3C023A467E2 /* RDP-Retina.icon */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -61,6 +62,7 @@
 		0818F96AFBE44CAB4B225524 /* RRTray.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RRTray.h; sourceTree = "<group>"; };
 		B60FD94DD60343A0EB0C284E /* RRTray.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RRTray.m; sourceTree = "<group>"; };
 		46051C27F61C6A9848E80800 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
+		67CBCBB72908B3C023A467E2 /* RDP-Retina.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = "RDP-Retina.icon"; sourceTree = "<group>"; };
 		50178A953A82BB4E518CA119 /* rdp-retina.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "rdp-retina.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -78,6 +80,7 @@
 		0AB599C79CAC73789BD4BE4D = {
 			isa = PBXGroup;
 			children = (
+				67CBCBB72908B3C023A467E2 /* RDP-Retina.icon */,
 				5C9E96A89C184C623D2EE358 /* core */,
 				FC16C3A9DA8FC7AA74048E6E /* mac */,
 				B6D6D43CC34EF2AF227B536E /* Products */,
@@ -196,6 +199,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8C8CE326555DFE4769A8D7F4 /* RDP-Retina.icon in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -329,6 +333,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ARCHS = "$(NATIVE_ARCH_ACTUAL)";
+				ASSETCATALOG_COMPILER_APPICON_NAME = "RDP-Retina";
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
@@ -386,6 +391,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ARCHS = "$(NATIVE_ARCH_ACTUAL)";
+				ASSETCATALOG_COMPILER_APPICON_NAME = "RDP-Retina";
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;

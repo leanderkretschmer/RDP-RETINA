@@ -28,6 +28,9 @@ FILE_TYPES = {
 }
 COMPILED = {".c", ".m"}
 PREFIXES = ["$(SRCROOT)/vendor/freerdp", "/opt/homebrew", "/usr/local"]
+# App-Icon aus Icon Composer (Xcode 26) als <Name>.icon im Wurzelverzeichnis. actool macht
+# daraus Assets.car und für ältere macOS-Versionen eine .icns.
+ICON_TYPE = "folder.iconcomposer.icon"
 
 
 def oid(*parts):
@@ -110,8 +113,8 @@ def project_settings(debug):
     return values
 
 
-def target_settings():
-    return {
+def target_settings(icon):
+    values = {
         # FreeRDP aus Homebrew gibt es nur für die eigene Architektur.
         "ARCHS": "$(NATIVE_ARCH_ACTUAL)",
         "CODE_SIGN_IDENTITY": "-",
@@ -142,6 +145,9 @@ def target_settings():
         "PRODUCT_BUNDLE_IDENTIFIER": BUNDLE_ID,
         "PRODUCT_NAME": "$(TARGET_NAME)",
     }
+    if icon:
+        values["ASSETCATALOG_COMPILER_APPICON_NAME"] = icon.stem
+    return values
 
 
 def main():
@@ -150,6 +156,11 @@ def main():
         for path in sorted((ROOT / group).iterdir()):
             if path.is_file() and path.suffix in FILE_TYPES:
                 files.append((group, path.name, path.suffix))
+    icons = sorted(p for p in ROOT.glob("*.icon") if p.is_dir())
+    icon = icons[0] if icons else None
+    if icon:
+        icon_file = oid("file", "root", icon.name)
+        icon_build = oid("build", "root", icon.name)
 
     project = oid("project")
     target = oid("target")
@@ -173,12 +184,18 @@ def main():
         if ext in COMPILED:
             w(f"\t\t{oid('build', group, name)} /* {name} in Sources */ = "
               f"{{isa = PBXBuildFile; fileRef = {oid('file', group, name)} /* {name} */; }};\n")
+    if icon:
+        w(f"\t\t{icon_build} /* {icon.name} in Resources */ = "
+          f"{{isa = PBXBuildFile; fileRef = {icon_file} /* {icon.name} */; }};\n")
     w("/* End PBXBuildFile section */\n\n")
 
     w("/* Begin PBXFileReference section */\n")
     for group, name, ext in files:
         w(f"\t\t{oid('file', group, name)} /* {name} */ = {{isa = PBXFileReference; "
           f"lastKnownFileType = {FILE_TYPES[ext]}; path = {q(name)}; sourceTree = \"<group>\"; }};\n")
+    if icon:
+        w(f"\t\t{icon_file} /* {icon.name} */ = {{isa = PBXFileReference; "
+          f"lastKnownFileType = {ICON_TYPE}; path = {q(icon.name)}; sourceTree = \"<group>\"; }};\n")
     w(f"\t\t{product} /* {NAME}.app */ = {{isa = PBXFileReference; explicitFileType = wrapper.application; "
       f"includeInIndex = 0; path = {q(NAME + '.app')}; sourceTree = BUILT_PRODUCTS_DIR; }};\n")
     w("/* End PBXFileReference section */\n\n")
@@ -191,6 +208,8 @@ def main():
 
     w("/* Begin PBXGroup section */\n")
     children = "".join(f"\t\t\t\t{oid('group', g)} /* {g} */,\n" for g in GROUPS)
+    if icon:
+        children = f"\t\t\t\t{icon_file} /* {icon.name} */,\n" + children
     w(f"\t\t{main_group} = {{\n\t\t\tisa = PBXGroup;\n\t\t\tchildren = (\n{children}"
       f"\t\t\t\t{products_group} /* Products */,\n\t\t\t);\n\t\t\tsourceTree = \"<group>\";\n\t\t}};\n")
     for group in GROUPS:
@@ -225,8 +244,9 @@ def main():
     w("/* End PBXProject section */\n\n")
 
     w("/* Begin PBXResourcesBuildPhase section */\n")
+    resources = f"\t\t\t\t{icon_build} /* {icon.name} in Resources */,\n" if icon else ""
     w(f"\t\t{resources_phase} /* Resources */ = {{\n\t\t\tisa = PBXResourcesBuildPhase;\n"
-      "\t\t\tbuildActionMask = 2147483647;\n\t\t\tfiles = (\n\t\t\t);\n"
+      f"\t\t\tbuildActionMask = 2147483647;\n\t\t\tfiles = (\n{resources}\t\t\t);\n"
       "\t\t\trunOnlyForDeploymentPostprocessing = 0;\n\t\t};\n")
     w("/* End PBXResourcesBuildPhase section */\n\n")
 
@@ -245,7 +265,7 @@ def main():
           f"\t\t\tname = {cfg};\n\t\t}};\n")
     for cfg in ("Debug", "Release"):
         w(f"\t\t{configs[('target', cfg)]} /* {cfg} */ = {{\n\t\t\tisa = XCBuildConfiguration;\n"
-          f"\t\t\tbuildSettings = {{\n{settings_block(target_settings(), 4)}\t\t\t}};\n"
+          f"\t\t\tbuildSettings = {{\n{settings_block(target_settings(icon), 4)}\t\t\t}};\n"
           f"\t\t\tname = {cfg};\n\t\t}};\n")
     w("/* End XCBuildConfiguration section */\n\n")
 
@@ -269,14 +289,17 @@ def main():
         '<?xml version="1.0" encoding="UTF-8"?>\n<Workspace\n   version = "1.0">\n'
         '   <FileRef\n      location = "self:">\n   </FileRef>\n</Workspace>\n', encoding="utf-8")
 
-    reference = (f'<BuildableReference\n               BuildableIdentifier = "primary"\n'
-                 f'               BlueprintIdentifier = "{target}"\n'
-                 f'               BuildableName = "{NAME}.app"\n'
-                 f'               BlueprintName = "{NAME}"\n'
-                 f'               ReferencedContainer = "container:{NAME}.xcodeproj">\n'
-                 f'            </BuildableReference>')
+    def reference(indent):
+        """BuildableReference so eingerückt, wie Xcode sie an dieser Stelle schreibt."""
+        pad = " " * indent
+        return (f'<BuildableReference\n{pad}   BuildableIdentifier = "primary"\n'
+                f'{pad}   BlueprintIdentifier = "{target}"\n'
+                f'{pad}   BuildableName = "{NAME}.app"\n'
+                f'{pad}   BlueprintName = "{NAME}"\n'
+                f'{pad}   ReferencedContainer = "container:{NAME}.xcodeproj">\n'
+                f'{pad}</BuildableReference>')
     # Beispielargumente, abgeschaltet. Das Kennwort fragt FreeRDP in der Xcode-Konsole ab.
-    arguments = ["/v:192.168.6.46", "/u:Administrator", "/f", "/scale:180",
+    arguments = ["/v:192.168.0.0", "/u:Administrator", "/f", "/scale:180",
                  "/gfx:AVC444", "/network:lan", "/cert:ignore", "/app:program:||taskmgr"]
     argument_xml = "".join(
         f'         <CommandLineArgument\n            argument = "{a}"\n            isEnabled = "NO">\n'
@@ -295,7 +318,7 @@ def main():
             buildForProfiling = "YES"
             buildForArchiving = "YES"
             buildForAnalyzing = "YES">
-            {reference}
+            {reference(12)}
          </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
@@ -318,7 +341,7 @@ def main():
       allowLocationSimulation = "YES">
       <BuildableProductRunnable
          runnableDebuggingMode = "0">
-         {reference}
+         {reference(9)}
       </BuildableProductRunnable>
       <CommandLineArguments>
 {argument_xml}      </CommandLineArguments>
@@ -331,7 +354,7 @@ def main():
       debugDocumentVersioning = "NO">
       <BuildableProductRunnable
          runnableDebuggingMode = "0">
-         {reference}
+         {reference(9)}
       </BuildableProductRunnable>
    </ProfileAction>
    <AnalyzeAction

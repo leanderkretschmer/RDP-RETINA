@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
 # Startet die gebaute App aus dem Terminal. Argumente wie bei xfreerdp, z.B.
-#   bin/rdp-retina /v:192.168.6.46 /u:Administrator /f /scale:180 /gfx:AVC444 /network:lan
-#   bin/rdp-retina /v:192.168.6.46 /u:Administrator '/app:program:||taskmgr'
+#   bin/rdp-retina /v:192.168.0.0/u:Administrator /f /scale:180 /gfx:AVC444 /network:lan
+#   bin/rdp-retina /v:192.168.0.0/u:Administrator '/app:program:||taskmgr'
 #
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 

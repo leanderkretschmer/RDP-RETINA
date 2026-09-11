@@ -147,7 +147,7 @@ Nachprüfen ohne Mac, mit dem Prüf-Client unter Linux:
 
 ```sh
 scripts/build-linux.sh
-export WINSRV_HOST=192.168.6.46 WINSRV_USER=Administrator WINSRV_PASSWORD=...
+export WINSRV_HOST=192.168.0.0 WINSRV_USER=Administrator WINSRV_PASSWORD=...
 tests/acceptance/desktop.sh     # Kriterien 1, 3, 5, 6
 tests/acceptance/remoteapp.sh   # Kriterien 4, 5
 tests/acceptance/reconnect.sh   # W4, braucht root
