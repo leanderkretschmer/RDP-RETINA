@@ -2,11 +2,11 @@
 #
 # W4: Wiederverbinden nach einer Netzunterbrechung.
 #
-# Der Prüf-Client verbindet sich; danach unterbricht iptables die Verbindung zum Server
-# für 20 Sekunden (ausgehend mit TCP-Reset, eingehend verworfen). Ohne Neustart muss der
-# Client danach wieder verbunden sein – in dieselbe Sitzung.
+# Der Prüf-Client verbindet sich; danach sperrt iptables den Weg zum Server für 20 Sekunden
+# und ss -K reißt die bestehende TCP-Verbindung ab (eine bloße Sperre übersteht TCP, die
+# Pakete werden nur wiederholt). Ohne Neustart muss der Client danach wieder verbunden sein.
 #
-# Braucht root (iptables) auf dem Linux-Rechner.
+# Braucht root (iptables, ss) auf dem Linux-Rechner.
 set -uo pipefail
 . "$(dirname "$0")/lib.sh"
 
@@ -37,15 +37,23 @@ PROBE_PID=$!
 
 sleep 18
 block
-echo "Netz unterbrochen: $(date +%T)"
+ss -K dst "$WINSRV_HOST" dport = :3389 > /dev/null 2>&1
+echo "Netz unterbrochen: $(date +%T), offene Verbindungen danach: $(ss -tn dst "$WINSRV_HOST" dport = :3389 | tail -n +2 | wc -l)"
 sleep 20
 unblock
 echo "Netz wieder da:    $(date +%T)"
 
 wait "$PROBE_PID"
 
-connects=$(grep -c 'VERBUNDEN sitzung=' "$OUT/probe.log")
-check "W4 Verbindung neu aufgebaut" $((connects >= 2)) "$connects Verbindungsaufbauten"
+attempts=$(grep -c 'Attempting reconnect' "$OUT/probe.log")
+reconnects=$(grep -c 'Verbindung wiederhergestellt' "$OUT/probe.log")
+check "W4 Verbindung neu aufgebaut" $((reconnects >= 1)) "$attempts Versuche, $reconnects erfolgreich"
+
+# Bildaktualisierungen vor und nach dem Wiederverbinden
+before=$(sed -n '/Verbindung wiederhergestellt/q;s/.*LAUF [0-9]*s, \([0-9]*\) Bild.*/\1/p' "$OUT/probe.log" | tail -1)
+after=$(grep -o 'LAUF [0-9]*s, [0-9]*' "$OUT/probe.log" | tail -1 | grep -o '[0-9]*$')
+check "W4 Bild kommt wieder" $((reconnects >= 1 && ${after:-0} > ${before:-0})) \
+	"Bildaktualisierungen ${before:-?} -> ${after:-?}"
 
 last_lines=$(tail -5 "$OUT/probe.log")
 echo "$last_lines" | grep -q 'The connection was cancelled'

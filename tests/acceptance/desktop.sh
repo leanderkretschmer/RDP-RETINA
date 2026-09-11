@@ -57,7 +57,7 @@ check "1 Auflösung serverseitig" $(($? == 0)) "$(grep -m1 -E 'Sitzung [0-9]+: '
 
 measured_dpi=$(grep -o -m1 'Bildschirm-DPI [0-9]*' "$OUT/server.txt" | grep -o '[0-9]*$')
 check "3 DPI ($SCALE % -> Stufe $nearest % = $expected_dpi)" $((${measured_dpi:-0} == expected_dpi)) \
-	"$(grep -m1 'DPI-aware' "$OUT/server.txt")"
+	"$(grep -m1 'DPI-aware:' "$OUT/server.txt")"
 
 ! grep -q -E '1024x768' "$OUT/probe.log" "$OUT/server.txt"
 check "5 kein 1024x768" $(($? == 0)) ""

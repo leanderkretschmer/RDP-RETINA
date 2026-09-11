@@ -366,10 +366,14 @@ static DWORD WINAPI rr_thread(LPVOID arg)
 
 		if (!freerdp_check_event_handles(context))
 		{
-			/* W4: nur mit /auto-reconnect, und nie nach einem gewollten Abbruch */
+			/* W4: nach einem Netzabbruch neu verbinden (AutoReconnectionEnabled), nie nach einem
+			 * gewollten Abbruch. PostConnect läuft dabei nicht erneut, die Kanäle schon. */
 			if (!freerdp_shall_disconnect_context(context) &&
 			    client_auto_reconnect_ex(instance, NULL))
+			{
+				WLog_Print(rr->log, WLOG_INFO, "Verbindung wiederhergestellt");
 				continue;
+			}
 			break;
 		}
 
