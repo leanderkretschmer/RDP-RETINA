@@ -339,12 +339,6 @@
 				GENERATE_INFOPLIST_FILE = NO;
 				HEADER_SEARCH_PATHS = (
 					"$(SRCROOT)/core",
-					"$(SRCROOT)/vendor/freerdp/include/freerdp3",
-					"$(SRCROOT)/vendor/freerdp/include/winpr3",
-					/opt/homebrew/include/freerdp3,
-					/opt/homebrew/include/winpr3,
-					/usr/local/include/freerdp3,
-					/usr/local/include/winpr3,
 				);
 				INFOPLIST_FILE = mac/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -377,6 +371,14 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "com.cratchmere.rdp-retina";
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SYSTEM_HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/vendor/freerdp/include/freerdp3",
+					"$(SRCROOT)/vendor/freerdp/include/winpr3",
+					/opt/homebrew/include/freerdp3,
+					/opt/homebrew/include/winpr3,
+					/usr/local/include/freerdp3,
+					/usr/local/include/winpr3,
+				);
 			};
 			name = Debug;
 		};
@@ -394,12 +396,6 @@
 				GENERATE_INFOPLIST_FILE = NO;
 				HEADER_SEARCH_PATHS = (
 					"$(SRCROOT)/core",
-					"$(SRCROOT)/vendor/freerdp/include/freerdp3",
-					"$(SRCROOT)/vendor/freerdp/include/winpr3",
-					/opt/homebrew/include/freerdp3,
-					/opt/homebrew/include/winpr3,
-					/usr/local/include/freerdp3,
-					/usr/local/include/winpr3,
 				);
 				INFOPLIST_FILE = mac/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -432,6 +428,14 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "com.cratchmere.rdp-retina";
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SYSTEM_HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/vendor/freerdp/include/freerdp3",
+					"$(SRCROOT)/vendor/freerdp/include/winpr3",
+					/opt/homebrew/include/freerdp3,
+					/opt/homebrew/include/winpr3,
+					/usr/local/include/freerdp3,
+					/usr/local/include/winpr3,
+				);
 			};
 			name = Release;
 		};

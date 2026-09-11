@@ -36,6 +36,11 @@ Archiv muss in *Signing & Capabilities* ein Team gesetzt werden; lokal wird ad h
 signiert („Sign to Run Locally“). Die App lädt FreeRDP zur Laufzeit aus Homebrew – sie
 läuft also auf Macs, auf denen `brew install freerdp` ausgeführt wurde.
 
+Homebrew baut FreeRDP für das installierte macOS. Der Linker meldet deshalb, die
+Bibliotheken seien neuer als das Deployment-Ziel 13.0, und nennt nicht vorhandene
+Suchpfade (`/opt/homebrew/lib` auf Intel, `vendor/freerdp/lib` ohne eigenen Build). Beides
+ist harmlos; die gebaute App braucht dann aber das macOS, für das FreeRDP gebaut wurde.
+
 **Hardware-Dekodierung (W1):** `scripts/build-freerdp-macos.sh` baut FreeRDP mit
 VideoToolbox nach `vendor/freerdp`. Das Xcode-Projekt nimmt diesen Pfad vor Homebrew.
 

@@ -123,8 +123,12 @@ def target_settings():
         "ENABLE_HARDENED_RUNTIME": "NO",
         "GCC_PREFIX_HEADER": "mac/RRPrefix.h",
         "GENERATE_INFOPLIST_FILE": "NO",
-        "HEADER_SEARCH_PATHS": ["$(SRCROOT)/core"]
-        + [f"{p}/include/{lib}" for p in PREFIXES for lib in ("freerdp3", "winpr3")],
+        "HEADER_SEARCH_PATHS": ["$(SRCROOT)/core"],
+        # FreeRDP als System-Header: deren Warnungen (z.B. -Wambiguous-macro in winpr/stream.h)
+        # gehören nicht zu diesem Projekt.
+        "SYSTEM_HEADER_SEARCH_PATHS": [
+            f"{p}/include/{lib}" for p in PREFIXES for lib in ("freerdp3", "winpr3")
+        ],
         "INFOPLIST_FILE": "mac/Info.plist",
         "LD_RUNPATH_SEARCH_PATHS": ["$(inherited)", "@executable_path/../Frameworks"]
         + [f"{p}/lib" for p in PREFIXES],
