@@ -1,0 +1,19 @@
+# Abhängigkeiten (FreeRDP-Quellbaum, Linux-Build) – per scripts/build-freerdp-linux.sh erzeugt
+/.deps/
+
+# Build-Verzeichnisse
+/build/
+/build-*/
+
+# Eigener FreeRDP-Build für macOS (scripts/build-freerdp-macos.sh)
+/vendor/
+
+# Xcode, persönlich
+xcuserdata/
+*.xcuserstate
+DerivedData/
+
+# Prüf-Client-Ausgaben
+/probe-out/
+
+.DS_Store
