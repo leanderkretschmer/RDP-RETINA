@@ -1,0 +1,291 @@
+/*
+ * rdp-retina – Desktop-Modus (Stufe 1)
+ *
+ * Ein Fenster, dessen Inhalt in Punkten genau Sitzungspixel / backingScaleFactor groß ist.
+ * P3: Mit /dynamic-resolution bestimmt das Fenster die Sitzung (Größenmeldung an den
+ * Server), ohne ist das Fenster auf die Sitzungsgröße festgelegt. Umgerechnet wird nie.
+ */
+#import "RRDesktopController.h"
+#import "RRKeyboard.h"
+#import "RRMetalView.h"
+#import "RRRenderer.h"
+#import "RRSession.h"
+
+#include <freerdp/settings.h>
+
+const NSWindowStyleMask RRDesktopWindowStyle = NSWindowStyleMaskTitled | NSWindowStyleMaskClosable |
+                                               NSWindowStyleMaskMiniaturizable |
+                                               NSWindowStyleMaskResizable;
+
+@interface RRDesktopWindow : NSWindow
+@end
+
+@implementation RRDesktopWindow
+
+- (BOOL)canBecomeKeyWindow
+{
+	return YES;
+}
+
+- (BOOL)canBecomeMainWindow
+{
+	return YES;
+}
+
+/* Größer als die nutzbare Fläche darf sein: lieber abschneiden als skalieren. */
+- (NSRect)constrainFrameRect:(NSRect)frameRect toScreen:(NSScreen *)screen
+{
+	return frameRect;
+}
+
+@end
+
+@interface RRDesktopController () <NSWindowDelegate, RRMetalViewInput>
+@end
+
+@implementation RRDesktopController
+{
+	__weak RRSession *_session;
+	RRDesktopWindow *_window;
+	RRMetalView *_view;
+	NSTimer *_resizeTimer;
+	BOOL _fullscreen;
+	BOOL _dynamic;
+}
+
+- (instancetype)initWithSession:(RRSession *)session
+{
+	self = [super init];
+	if (self)
+		_session = session;
+	return self;
+}
+
+- (NSString *)windowTitle
+{
+	rdpSettings *settings = rr_settings(_session.rr);
+	const char *title = freerdp_settings_get_string(settings, FreeRDP_WindowTitle);
+	if (title && *title)
+		return [NSString stringWithUTF8String:title];
+
+	const char *host = freerdp_settings_get_string(settings, FreeRDP_ServerHostname);
+	return [NSString stringWithFormat:@"%s – rdp-retina", host ? host : "?"];
+}
+
+- (void)showWithPixelSize:(NSSize)pixels fullscreen:(BOOL)fullscreen
+{
+	RRSession *session = _session;
+	NSScreen *screen = session.primaryScreen;
+	const CGFloat scale = screen.backingScaleFactor;
+
+	_fullscreen = fullscreen;
+	_dynamic = freerdp_settings_get_bool(rr_settings(session.rr), FreeRDP_DynamicResolutionUpdate);
+
+	const NSSize points = NSMakeSize(pixels.width / scale, pixels.height / scale);
+	NSWindowStyleMask style = RRDesktopWindowStyle;
+	NSRect contentRect = NSMakeRect(0, 0, points.width, points.height);
+
+	if (fullscreen)
+	{
+		style = NSWindowStyleMaskBorderless;
+		contentRect = screen.frame;
+	}
+	else if (!_dynamic)
+		style &= ~NSWindowStyleMaskResizable;
+
+	_window = [[RRDesktopWindow alloc] initWithContentRect:contentRect
+	                                             styleMask:style
+	                                               backing:NSBackingStoreBuffered
+	                                                 defer:NO
+	                                                screen:screen];
+	_window.releasedWhenClosed = NO;
+	_window.delegate = self;
+	_window.acceptsMouseMovedEvents = YES;
+	_window.backgroundColor = NSColor.blackColor;
+	_window.title = [self windowTitle];
+
+	_view = [[RRMetalView alloc] initWithFrame:NSMakeRect(0, 0, contentRect.size.width,
+	                                                      contentRect.size.height)
+	                                  renderer:session.renderer];
+	_view.input = self;
+	_view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+	_view.texture = session.desktopTexture;
+	_window.contentView = _view;
+	[_window makeFirstResponder:_view];
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+	[NSApp activateIgnoringOtherApps:YES];
+#pragma clang diagnostic pop
+
+	if (fullscreen)
+	{
+		NSApp.presentationOptions =
+		    NSApplicationPresentationHideDock | NSApplicationPresentationHideMenuBar;
+		[_window setFrame:screen.frame display:NO];
+	}
+	else
+	{
+		if (!_dynamic)
+		{
+			_window.contentMinSize = points;
+			_window.contentMaxSize = points;
+		}
+		const NSRect visible = screen.visibleFrame;
+		[_window setFrameTopLeftPoint:NSMakePoint(visible.origin.x, NSMaxY(visible))];
+	}
+
+	[_window makeKeyAndOrderFront:nil];
+}
+
+- (void)desktopResized:(NSSize)pixels texture:(RRTexture *)texture
+{
+	_view.texture = texture;
+
+	if (_window && !_fullscreen && !_dynamic)
+	{
+		const CGFloat scale = _window.backingScaleFactor;
+		const NSSize points = NSMakeSize(pixels.width / scale, pixels.height / scale);
+		_window.contentMinSize = points;
+		_window.contentMaxSize = points;
+		[_window setContentSize:points];
+	}
+	[_view setNeedsRender];
+}
+
+- (void)desktopUpdated
+{
+	[_view setNeedsRender];
+}
+
+- (void)cursorChanged
+{
+	if (!_window)
+		return;
+
+	[_window invalidateCursorRectsForView:_view];
+	const NSPoint location = [_view convertPoint:_window.mouseLocationOutsideOfEventStream
+	                                    fromView:nil];
+	if (_window.isKeyWindow && NSPointInRect(location, _view.bounds))
+		[_session.cursor set];
+}
+
+- (void)close
+{
+	[_resizeTimer invalidate];
+	_resizeTimer = nil;
+	_window.delegate = nil;
+	[_window close];
+}
+
+- (void)runSelfTest
+{
+	[_view verifyPixelExact:^(NSString *report, BOOL exact) {
+		fprintf(stderr, "rdp-retina: Selbsttest Desktop %s – %s\n", exact ? "1:1" : "NICHT 1:1",
+		        report.UTF8String);
+	}];
+}
+
+/* ---- Größe (P3) ------------------------------------------------------------------------ */
+
+- (void)scheduleResize
+{
+	[_resizeTimer invalidate];
+	_resizeTimer = [NSTimer scheduledTimerWithTimeInterval:0.25
+	                                                target:self
+	                                              selector:@selector(sendResize)
+	                                              userInfo:nil
+	                                               repeats:NO];
+}
+
+- (void)sendResize
+{
+	[_resizeTimer invalidate];
+	_resizeTimer = nil;
+
+	const CGFloat scale = _window.backingScaleFactor;
+	const NSSize size = _view.bounds.size;
+	(void)rr_request_size(_session.rr, (UINT32)lround(size.width * scale),
+	                      (UINT32)lround(size.height * scale));
+}
+
+/* ---- NSWindowDelegate ------------------------------------------------------------------ */
+
+- (void)windowWillClose:(NSNotification *)notification
+{
+	[NSApp terminate:nil];
+}
+
+- (void)windowDidResize:(NSNotification *)notification
+{
+	if (_dynamic && !_fullscreen)
+		[self scheduleResize];
+}
+
+- (void)windowDidEndLiveResize:(NSNotification *)notification
+{
+	if (_dynamic)
+		[self sendResize];
+}
+
+- (void)windowDidChangeBackingProperties:(NSNotification *)notification
+{
+	if (_dynamic)
+		[self scheduleResize];
+}
+
+- (void)windowDidMiniaturize:(NSNotification *)notification
+{
+	(void)rr_suppress_output(_session.rr, YES);
+}
+
+- (void)windowDidDeminiaturize:(NSNotification *)notification
+{
+	(void)rr_suppress_output(_session.rr, NO);
+}
+
+- (void)windowDidBecomeKey:(NSNotification *)notification
+{
+	[_session.keyboard syncLockStates];
+}
+
+- (void)windowDidResignKey:(NSNotification *)notification
+{
+	[_session.keyboard releaseAll];
+}
+
+/* ---- RRMetalViewInput ------------------------------------------------------------------ */
+
+- (void)metalView:(RRMetalView *)view mouseMovedTo:(NSPoint)point
+{
+	(void)rr_mouse_move(_session.rr, (INT32)point.x, (INT32)point.y);
+}
+
+- (void)metalView:(RRMetalView *)view button:(NSUInteger)button down:(BOOL)down at:(NSPoint)point
+{
+	(void)rr_mouse_button(_session.rr, (UINT32)button, down, (INT32)point.x, (INT32)point.y);
+}
+
+- (void)metalView:(RRMetalView *)view scrollWheel:(NSEvent *)event
+{
+	[_session sendScrollWheel:event];
+}
+
+- (void)metalView:(RRMetalView *)view keyEvent:(NSEvent *)event
+{
+	[_session.keyboard handleEvent:event];
+}
+
+- (NSCursor *)cursorForMetalView:(RRMetalView *)view
+{
+	return _session.cursor;
+}
+
+- (void)metalViewDidChangeBacking:(RRMetalView *)view
+{
+	if (!_dynamic && (fabs(_window.backingScaleFactor - _session.scale) > 0.01))
+		fprintf(stderr, "rdp-retina: Fenster auf Bildschirm mit anderem Faktor – ohne "
+		                "/dynamic-resolution wird beschnitten, nicht skaliert\n");
+}
+
+@end

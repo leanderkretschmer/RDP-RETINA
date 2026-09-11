@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+#
+# Startet die gebaute App aus dem Terminal. Argumente wie bei xfreerdp, z.B.
+#   bin/rdp-retina /v:192.168.6.46 /u:Administrator /f /scale:180 /gfx:AVC444 /network:lan
+#   bin/rdp-retina /v:192.168.6.46 /u:Administrator '/app:program:||taskmgr'
+#
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+
+for candidate in \
+	"$ROOT/build/xcode/Build/Products/Release/rdp-retina.app" \
+	"$ROOT/build/xcode/Build/Products/Debug/rdp-retina.app"; do
+	if [ -x "$candidate/Contents/MacOS/rdp-retina" ]; then
+		exec "$candidate/Contents/MacOS/rdp-retina" "$@"
+	fi
+done
+
+echo "rdp-retina ist noch nicht gebaut – zuerst scripts/build-macos.sh ausführen" >&2
+exit 1
