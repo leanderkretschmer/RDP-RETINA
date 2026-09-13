@@ -166,6 +166,11 @@ extern "C"
 	 * "" = Schalter ohne Wert, NULL = nicht angegeben. */
 	const char* rr_option(rrContext* rr, const char* name);
 
+	/* Alle /app:-Angaben der Kommandozeile in ihrer Reihenfolge, ohne "/app:". Die erste
+	 * startet FreeRDP, die weiteren laufen über dieselbe Verbindung. */
+	size_t rr_app_count(rrContext* rr);
+	const char* rr_app(rrContext* rr, size_t index);
+
 	/* TRUE, wenn /size, /w oder /h ausdrücklich angegeben wurde. */
 	BOOL rr_size_given(rrContext* rr);
 
@@ -230,6 +235,11 @@ extern "C"
 	BOOL rr_rail_notify_event(rrContext* rr, UINT32 windowId, UINT32 iconId, UINT32 message);
 	/* Aktuellen Zustand eines Fensters holen (title und visibilityRects bleiben NULL). */
 	BOOL rr_rail_get_window(rrContext* rr, UINT32 windowId, rrWindow* window);
+	/* Weiteres Programm in derselben Sitzung starten, Angabe wie bei /app:
+	 * ("program:||notepad,cmd:datei.txt" oder "||notepad"). Windows erlaubt je Benutzer nur
+	 * eine Sitzung, eine zweite Verbindung würde die erste verdrängen. Vor dem Verbindungsaufbau
+	 * aufgerufen, startet das Programm nach dem ersten. */
+	BOOL rr_rail_launch(rrContext* rr, const char* app);
 
 #ifdef __cplusplus
 }

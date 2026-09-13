@@ -378,6 +378,7 @@ static DWORD WINAPI rr_thread(LPVOID arg)
 		}
 
 		rr_disp_tick(rr);
+		rr_rail_tick(rr);
 	}
 
 	error = freerdp_get_last_error(context);

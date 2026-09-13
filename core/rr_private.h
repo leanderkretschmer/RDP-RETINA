@@ -37,6 +37,8 @@ struct rr_context
 	/* Kommandozeile */
 	char** options;
 	size_t optionCount;
+	char** apps; /* alle /app:-Angaben */
+	size_t appCount;
 	BOOL sizeGiven;
 	BOOL gfxGiven;
 	BOOL reconnectGiven;
@@ -76,6 +78,13 @@ struct rr_context
 	UINT32 iconEntries;
 	BOOL railActive;
 	BOOL railExecSent;
+	/* weitere Programme: eines nach dem anderen, jeweils nach der Antwort des Servers */
+	char** appQueue;
+	size_t appQueueCount;
+	BOOL appsQueued;
+	BOOL appPending;
+	UINT64 appSentAt;
+	UINT32 appsStarted;
 	pcRailServerHandshake railHandshake;
 	pcRailServerHandshakeEx railHandshakeEx;
 
@@ -103,6 +112,8 @@ void rr_disp_tick(rrContext* rr);
 BOOL rr_rail_init(rrContext* rr, RailClientContext* rail);
 void rr_rail_uninit(rrContext* rr, RailClientContext* rail);
 void rr_rail_register_orders(rrContext* rr, rdpWindowUpdate* window);
+/* Aus der Ereignisschleife: wartende Programme starten, ausbleibende Antworten überbrücken. */
+void rr_rail_tick(rrContext* rr);
 /* Alle Fenster verwerfen und der Oberfläche melden. */
 void rr_rail_reset(rrContext* rr);
 /* Speicher freigeben, ohne Rückrufe. */

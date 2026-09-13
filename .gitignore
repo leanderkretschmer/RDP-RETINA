@@ -17,3 +17,4 @@ DerivedData/
 /probe-out/
 
 .DS_Store
+/.env

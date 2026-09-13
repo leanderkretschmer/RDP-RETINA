@@ -795,6 +795,12 @@ static BOOL run_step(Probe* p, const Step* step)
 			(void)rr_mouse_button(p->rr, button, FALSE, x, y);
 		}
 	}
+	else if (strcmp(step->action, "app") == 0)
+	{
+		/* Weiteres Programm in derselben Sitzung: app program:||notepad */
+		if (!rr_rail_launch(p->rr, step->args))
+			probe_log(p, "AKTION app abgelehnt: %s", step->args);
+	}
 	else if (strcmp(step->action, "key") == 0)
 	{
 		const UINT32 scancode = (UINT32)strtoul(sel, NULL, 16);

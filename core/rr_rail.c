@@ -20,6 +20,10 @@
 #include <freerdp/codec/color.h>
 #include <freerdp/client/rail.h>
 
+#include <string.h>
+
+#include <winpr/sysinfo.h>
+
 #include "rr_private.h"
 
 struct rr_rail_window
@@ -592,6 +596,183 @@ static const char* rr_exec_error(UINT32 code)
 
 /* Nach dem Handshake schickt der Client Informationen, Systemparameter und den
  * Startbefehl (MS-RDPERP 1.3.2.1). Einmal je Verbindung. */
+/* ---- weitere Programme in derselben Sitzung ---------------------------------------------- */
+
+typedef struct
+{
+	char* program;
+	char* args;
+	char* workdir;
+} rrAppSpec;
+
+static const char* const rr_app_keys[] = { "program:", "cmd:",  "workdir:", "file:",
+	                                       "name:",    "icon:", "guid:",    "hidef:" };
+
+/* Länge des /app:-Schlüssels am Anfang von s, 0 ohne Schlüssel */
+static size_t rr_app_key(const char* s)
+{
+	for (size_t i = 0; i < ARRAYSIZE(rr_app_keys); i++)
+	{
+		const size_t len = strlen(rr_app_keys[i]);
+		if (strncmp(s, rr_app_keys[i], len) == 0)
+			return len;
+	}
+	return 0;
+}
+
+static void rr_app_spec_free(rrAppSpec* spec)
+{
+	free(spec->program);
+	free(spec->args);
+	free(spec->workdir);
+	memset(spec, 0, sizeof(*spec));
+}
+
+/* "program:||notepad,cmd:a b,workdir:C:\" oder nur "||notepad". Ein Komma trennt nur vor einem
+ * bekannten Schlüssel, Argumente dürfen also Kommas enthalten. file: wird wie bei FreeRDP an
+ * die Argumente gehängt. */
+static BOOL rr_app_spec_parse(const char* text, rrAppSpec* spec)
+{
+	char* file = NULL;
+
+	memset(spec, 0, sizeof(*spec));
+	for (const char* pos = text; *pos != '\0';)
+	{
+		const size_t keyLen = rr_app_key(pos);
+		const char* value = pos + keyLen;
+		const char* end = value;
+		while ((*end != '\0') && !((*end == ',') && (rr_app_key(end + 1) > 0)))
+			end++;
+
+		char* copy = strndup(value, (size_t)(end - value));
+		if (!copy)
+			goto fail;
+
+		char** target = NULL;
+		if ((keyLen == 0) || (strncmp(pos, "program:", 8) == 0))
+			target = &spec->program;
+		else if (strncmp(pos, "cmd:", 4) == 0)
+			target = &spec->args;
+		else if (strncmp(pos, "workdir:", 8) == 0)
+			target = &spec->workdir;
+		else if (strncmp(pos, "file:", 5) == 0)
+			target = &file;
+
+		if (target)
+		{
+			free(*target);
+			*target = copy;
+		}
+		else
+			free(copy);
+		pos = (*end != '\0') ? end + 1 : end;
+	}
+
+	if (file && spec->args)
+	{
+		const size_t size = strlen(spec->args) + strlen(file) + 2;
+		char* both = malloc(size);
+		if (!both)
+			goto fail;
+		(void)_snprintf(both, size, "%s %s", spec->args, file);
+		free(spec->args);
+		spec->args = both;
+	}
+	else if (file)
+	{
+		spec->args = file;
+		file = NULL;
+	}
+	free(file);
+
+	if (!spec->program || (*spec->program == '\0'))
+	{
+		rr_app_spec_free(spec);
+		return FALSE;
+	}
+	return TRUE;
+
+fail:
+	free(file);
+	rr_app_spec_free(spec);
+	return FALSE;
+}
+
+static BOOL rr_rail_enqueue(rrContext* rr, const char* app)
+{
+	char* copy = _strdup(app);
+	if (!copy)
+		return FALSE;
+
+	EnterCriticalSection(&rr->railLock);
+	char** tmp = realloc(rr->appQueue, (rr->appQueueCount + 1) * sizeof(char*));
+	if (tmp)
+	{
+		rr->appQueue = tmp;
+		rr->appQueue[rr->appQueueCount++] = copy;
+	}
+	LeaveCriticalSection(&rr->railLock);
+
+	if (!tmp)
+		free(copy);
+	return tmp != NULL;
+}
+
+/* Nächstes wartendes Programm, sobald das erste gestartet ist und keine Antwort aussteht.
+ * Der Server verarbeitet die Starts nacheinander; so ordnet sich jede Antwort zu. */
+static void rr_rail_exec_next(rrContext* rr)
+{
+	for (;;)
+	{
+		char* app = NULL;
+
+		EnterCriticalSection(&rr->railLock);
+		if (rr->rail && rr->railExecSent && !rr->appPending && (rr->appQueueCount > 0))
+		{
+			app = rr->appQueue[0];
+			rr->appQueueCount--;
+			memmove(&rr->appQueue[0], &rr->appQueue[1], rr->appQueueCount * sizeof(char*));
+			rr->appPending = TRUE;
+			rr->appSentAt = GetTickCount64();
+		}
+		LeaveCriticalSection(&rr->railLock);
+
+		if (!app)
+			return;
+
+		rrAppSpec spec = { 0 };
+		UINT rc = ERROR_INVALID_PARAMETER;
+		if (rr_app_spec_parse(app, &spec))
+		{
+			RAIL_EXEC_ORDER exec = { 0 };
+			exec.RemoteApplicationProgram = spec.program;
+			exec.RemoteApplicationArguments = spec.args;
+			exec.RemoteApplicationWorkingDir = spec.workdir;
+			WLog_Print(rr->log, WLOG_INFO, "starte RemoteApp %s%s%s", spec.program,
+			           spec.args ? " " : "", spec.args ? spec.args : "");
+
+			/* unter der Sperre, damit der Kanal nicht zwischendurch verschwindet */
+			EnterCriticalSection(&rr->railLock);
+			rc = rr->rail ? rr->rail->ClientExecute(rr->rail, &exec) : ERROR_INVALID_HANDLE;
+			LeaveCriticalSection(&rr->railLock);
+		}
+		rr_app_spec_free(&spec);
+
+		if (rc == CHANNEL_RC_OK)
+		{
+			free(app);
+			return;
+		}
+
+		WLog_Print(rr->log, WLOG_ERROR, "RemoteApp %s ließ sich nicht starten (0x%08" PRIX32 ")",
+		           app, rc);
+		free(app);
+		EnterCriticalSection(&rr->railLock);
+		rr->appPending = FALSE;
+		LeaveCriticalSection(&rr->railLock);
+	}
+}
+
 static UINT rr_rail_exec(rrContext* rr)
 {
 	rdpSettings* settings = rr->common.context.settings;
@@ -603,12 +784,25 @@ static UINT rr_rail_exec(rrContext* rr)
 	if (!app || (*app == '\0'))
 		return CHANNEL_RC_OK;
 
+	EnterCriticalSection(&rr->railLock);
 	rr->railExecSent = TRUE;
+	rr->appPending = TRUE;
+	rr->appSentAt = GetTickCount64();
+	LeaveCriticalSection(&rr->railLock);
 	WLog_Print(rr->log, WLOG_INFO, "starte RemoteApp %s", app);
 
 	const UINT rc = client_rail_server_start_cmd(rr->rail);
 	if (rc != CHANNEL_RC_OK)
 		return rc;
+
+	/* Weitere /app:-Angaben folgen über dieselbe Verbindung, nach einem Wiederverbinden
+	 * nicht noch einmal (die Programme laufen in der Sitzung weiter). */
+	if (!rr->appsQueued)
+	{
+		rr->appsQueued = TRUE;
+		for (size_t i = 1; i < rr->appCount; i++)
+			(void)rr_rail_enqueue(rr, rr->apps[i]);
+	}
 
 	/* Arbeitsbereiche ohne Menüleiste und Dock, damit Maximieren passt – je Bildschirm. */
 	if (rr->multimon)
@@ -666,15 +860,30 @@ static UINT rr_rail_server_execute_result(RailClientContext* rail,
 		return CHANNEL_RC_OK;
 
 	char* exe = rail_string_to_utf8_string(&result->exeOrFile);
-	if (result->execResult != RAIL_EXEC_S_OK)
+	const BOOL ok = (result->execResult == RAIL_EXEC_S_OK);
+	BOOL nothingRuns = FALSE;
+
+	EnterCriticalSection(&rr->railLock);
+	rr->appPending = FALSE;
+	if (ok)
+		rr->appsStarted++;
+	else
+		nothingRuns = (rr->appsStarted == 0) && (rr->appQueueCount == 0) && (rr->windowCount == 0);
+	LeaveCriticalSection(&rr->railLock);
+
+	if (!ok)
 	{
 		WLog_Print(rr->log, WLOG_ERROR, "RemoteApp %s: %s (0x%08" PRIX32 ")", exe ? exe : "",
 		           rr_exec_error(result->execResult), result->rawResult);
-		freerdp_abort_connect_context(&rr->common.context);
+		/* Ohne ein laufendes Programm hat die Sitzung keinen Zweck. */
+		if (nothingRuns)
+			freerdp_abort_connect_context(&rr->common.context);
 	}
 	else
 		WLog_Print(rr->log, WLOG_INFO, "RemoteApp %s gestartet", exe ? exe : "");
 	free(exe);
+
+	rr_rail_exec_next(rr);
 	return CHANNEL_RC_OK;
 }
 
@@ -813,9 +1022,39 @@ void rr_rail_uninit(rrContext* rr, RailClientContext* rail)
 {
 	if (rail)
 		rail->custom = NULL;
+	EnterCriticalSection(&rr->railLock);
 	rr->rail = NULL;
 	rr->railActive = FALSE;
 	rr->railExecSent = FALSE;
+	rr->appPending = FALSE;
+	LeaveCriticalSection(&rr->railLock);
+}
+
+void rr_rail_tick(rrContext* rr)
+{
+	EnterCriticalSection(&rr->railLock);
+	const BOOL waiting = (rr->appQueueCount > 0);
+	const BOOL overdue =
+	    waiting && rr->appPending && (GetTickCount64() - rr->appSentAt > 10000);
+	if (overdue)
+		rr->appPending = FALSE;
+	LeaveCriticalSection(&rr->railLock);
+
+	if (overdue)
+		WLog_Print(rr->log, WLOG_WARN, "keine Antwort auf den letzten Programmstart, starte das nächste");
+	if (waiting)
+		rr_rail_exec_next(rr);
+}
+
+BOOL rr_rail_launch(rrContext* rr, const char* app)
+{
+	if (!rr || !app || (*app == '\0') ||
+	    !freerdp_settings_get_bool(rr->common.context.settings, FreeRDP_RemoteApplicationMode))
+		return FALSE;
+	if (!rr_rail_enqueue(rr, app))
+		return FALSE;
+	rr_rail_exec_next(rr);
+	return TRUE;
 }
 
 void rr_rail_reset(rrContext* rr)
@@ -840,6 +1079,12 @@ void rr_rail_reset(rrContext* rr)
 
 void rr_rail_free(rrContext* rr)
 {
+	for (size_t i = 0; i < rr->appQueueCount; i++)
+		free(rr->appQueue[i]);
+	free(rr->appQueue);
+	rr->appQueue = NULL;
+	rr->appQueueCount = 0;
+
 	for (size_t i = 0; i < rr->windowCount; i++)
 		rr_window_free(rr->windows[i]);
 	free(rr->windows);

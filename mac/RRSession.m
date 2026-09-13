@@ -8,9 +8,11 @@
 #import "RRKeyboard.h"
 #import "RRRailController.h"
 #import "RRRenderer.h"
+#import "RRShare.h"
 #import "RRTray.h"
 
 #include <os/lock.h>
+#include <unistd.h>
 
 #include <freerdp/error.h>
 #include <freerdp/settings.h>
@@ -31,6 +33,8 @@
 	BOOL _stopping;
 	NSTimer *_statsTimer;
 	BOOL _selfTestScheduled;
+	NSString *_sharePath;
+	RRShare *_share;
 }
 
 static RRSession *RRSessionFromContext(rrContext *rr)
@@ -287,6 +291,38 @@ static void rr_mac_channel_disconnected(rrContext *rr, const char *name, void *i
 	if (!_rr)
 		return nil;
 
+	/* Mehrere RemoteApps teilen sich eine Sitzung: Läuft schon eine Instanz für diesen Server
+	 * und Benutzer, übernimmt sie die Programme, und dieser Aufruf endet hier. */
+	rdpSettings *settings = rr_settings(_rr);
+	if (freerdp_settings_get_bool(settings, FreeRDP_RemoteApplicationMode) &&
+	    !rr_option(_rr, "retina-noshare"))
+	{
+		_sharePath = [RRShare socketPathForSettings:settings];
+
+		NSMutableArray<NSString *> *apps = [NSMutableArray new];
+		for (size_t i = 0; i < rr_app_count(_rr); i++)
+		{
+			NSString *app = [NSString stringWithUTF8String:rr_app(_rr, i)];
+			if (app)
+				[apps addObject:app];
+		}
+
+		const RRShareResult result =
+		    _sharePath ? [RRShare handOffApps:apps toPath:_sharePath] : RRShareNoInstance;
+		if (result == RRShareDone)
+		{
+			fprintf(stderr, "rdp-retina: an die laufende Sitzung übergeben\n");
+			*exitCode = 0;
+			return nil;
+		}
+		if (result == RRShareRefused)
+		{
+			fprintf(stderr, "rdp-retina: die laufende Sitzung hat die Programme abgelehnt\n");
+			*exitCode = 1;
+			return nil;
+		}
+	}
+
 	_renderer = [RRRenderer new];
 	if (!_renderer)
 	{
@@ -300,6 +336,7 @@ static void rr_mac_channel_disconnected(rrContext *rr, const char *name, void *i
 
 - (void)dealloc
 {
+	[_share invalidate];
 	if (_rr)
 		rr_free(_rr);
 }
@@ -406,6 +443,18 @@ static void rr_mac_channel_disconnected(rrContext *rr, const char *name, void *i
 	{
 		_rail = [[RRRailController alloc] initWithSession:self];
 		_tray = [[RRTray alloc] initWithSession:self];
+
+		if (_sharePath)
+		{
+			/* Schon vor dem Verbindungsaufbau: Programme warten, bis die Sitzung steht. */
+			__weak RRSession *weakSelf = self;
+			_share = [[RRShare alloc] initWithPath:_sharePath
+			                               handler:^BOOL(NSString *app) {
+				                               return [weakSelf launchApp:app];
+			                               }];
+			if (!_share)
+				fprintf(stderr, "rdp-retina: weitere Aufrufe können diese Sitzung nicht mitnutzen\n");
+		}
 	}
 	else
 	{
@@ -441,11 +490,26 @@ static void rr_mac_channel_disconnected(rrContext *rr, const char *name, void *i
 	        (unsigned long long)_renderer.presentedFrames, codecs.UTF8String);
 }
 
+- (BOOL)launchApp:(NSString *)app
+{
+	if (_stopping || !rr_rail_launch(_rr, app.UTF8String))
+		return NO;
+
+	fprintf(stderr, "rdp-retina: weiteres Programm %s\n", app.UTF8String);
+	if (@available(macOS 14.0, *))
+		[NSApp activate];
+	else
+		[NSApp activateIgnoringOtherApps:YES];
+	return YES;
+}
+
 - (void)stop
 {
 	if (_stopping)
 		return;
 	_stopping = YES;
+	[_share invalidate];
+	_share = nil;
 	[_statsTimer invalidate];
 	_statsTimer = nil;
 	rr_stop(_rr);
@@ -462,9 +526,22 @@ static void rr_mac_channel_disconnected(rrContext *rr, const char *name, void *i
 		        freerdp_get_last_error_string(error));
 		/* Vom Server beendet (Abmelden, Anwendung geschlossen) ist kein Fehler. */
 		if (GET_FREERDP_ERROR_CLASS(error) != FREERDP_ERROR_ERRINFO_CLASS)
+		{
 			_exitCode = 1;
+			/* Ohne Terminal, z.B. aus dem Dock gestartet, sähe sonst niemand den Grund. */
+			if (!isatty(STDERR_FILENO))
+			{
+				NSAlert *alert = [NSAlert new];
+				alert.messageText = @"Verbindung beendet";
+				alert.informativeText =
+				    [NSString stringWithUTF8String:freerdp_get_last_error_string(error) ?: ""] ?: @"";
+				[alert runModal];
+			}
+		}
 	}
 
+	[_share invalidate];
+	_share = nil;
 	[_rail closeAll];
 	[_tray removeAll];
 	[_desktop close];

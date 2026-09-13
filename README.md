@@ -81,6 +81,24 @@ Eigene Schalter (vor FreeRDP herausgefiltert):
 | `/retina-stats[:s]` | alle s Sekunden GFX-Codecs und gezeichnete Bilder auf stderr |
 | `/retina-selftest` | prüft Geometrie und rechnet das Bild pixelgenau gegen die Quelle nach (P2) |
 | `/retina-verbose` | protokolliert die RemoteApp-Fensterverwaltung |
+| `/retina-noshare` | eigene Verbindung, statt Programme an eine laufende Instanz zu übergeben (verdrängt deren Sitzung) |
+
+**Mehrere RemoteApps in einer Sitzung.** Windows gibt jedem Benutzer nur eine Sitzung
+(`fSingleSessionPerUser`); eine zweite Verbindung würde die erste verdrängen. Deshalb laufen alle
+Programme für denselben Server und Benutzer über eine Verbindung:
+
+```sh
+# mehrere Programme in einem Aufruf – /app: darf mehrfach stehen
+bin/rdp-retina /v:192.168.0.0 /u:Administrator '/app:program:||taskmgr' '/app:program:||notepad'
+
+# später dazu, z.B. aus einem anderen Terminal: übergibt an die laufende Instanz und endet
+bin/rdp-retina /v:192.168.0.0 /u:Administrator '/app:program:||notepad'
+```
+
+Die laufende Instanz lauscht auf einem Unix-Socket in `$TMPDIR` (einer je Server, Port, Domäne
+und Benutzer, nur für den eigenen Benutzer zugänglich). Die Programme startet sie nacheinander,
+jeweils nach der Antwort des Servers auf das vorige; kommt keine, nach 10 Sekunden. Ein
+fehlgeschlagenes Programm beendet die Verbindung nur, wenn sonst nichts läuft.
 
 Tastatur (P7):
 
@@ -179,6 +197,26 @@ nur eben kleiner als der Bildschirm.
 für eine exakte Stufe `/scale-desktop:175` oder `/scale-desktop:200` verwenden.
 `sitzinfo.ps1` meldet immer 96 DPI, weil es selbst nicht DPI-aware läuft;
 `tests/acceptance/lib.sh` misst mit einem Per-Monitor-V2-Prozess.
+
+### Mehrere Programme in einer Sitzung
+
+Gemessen mit dem Prüf-Client: Task-Manager, Einstellungen und Editor liefen in **einer**
+Verbindung und damit in einer Sitzung; das dritte Programm wurde zur Laufzeit nachgestartet, also
+über denselben Weg, den ein weiterer Aufruf auf dem Mac nimmt. Der Server bestätigt jeden Start
+einzeln, und zwar auch den erfolgreichen – darauf wartet der Kern, bevor er das nächste schickt.
+
+Die Einstellungen brauchen einen Umweg. `SystemSettings.exe` direkt zu starten meldet Erfolg,
+öffnet aber kein Fenster, weil die App über ihre AUMID aktiviert und nicht als Programm gestartet
+wird. Das funktioniert:
+
+```sh
+'/app:program:||cmd,cmd:/c start ms-settings:'
+```
+
+Das Fenster „Einstellungen“ erscheint damit maximiert mit 5120×2721 Pixeln neben den anderen
+Programmen. Beim Prüf-Server sind die Aliase (`||taskmgr`, `||notepad`, `||cmd`) in der
+RemoteApp-Freigabeliste eingetragen; nicht gelistete Programme sind dort ebenfalls erlaubt, dann
+ist statt des Alias der vollständige Pfad anzugeben.
 
 ### Was am Mac nicht automatisch geht
 

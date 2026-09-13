@@ -1,0 +1,34 @@
+/*
+ * rdp-retina – mehrere RemoteApps in einer Sitzung
+ *
+ * Windows gibt jedem Benutzer nur eine Sitzung (fSingleSessionPerUser); eine zweite Verbindung
+ * verdrängt die erste. Deshalb übernimmt eine laufende Instanz weitere Programme: Sie lauscht
+ * auf einem Unix-Socket je Server und Benutzer. Ein neuer Aufruf schickt ihr seine
+ * /app:-Angaben, wartet auf die Bestätigung und beendet sich.
+ */
+#import <Foundation/Foundation.h>
+
+#include <freerdp/settings.h>
+
+NS_ASSUME_NONNULL_BEGIN
+
+typedef NS_ENUM(NSInteger, RRShareResult) {
+	RRShareNoInstance, /* keine laufende Instanz: selbst verbinden */
+	RRShareDone,       /* übernommen */
+	RRShareRefused,    /* Instanz läuft, hat abgelehnt */
+};
+
+@interface RRShare : NSObject
+
+/* Socket für Server, Port, Domäne und Benutzer; nil ohne Server oder bei zu langem Pfad. */
++ (nullable NSString *)socketPathForSettings:(const rdpSettings *)settings;
+
++ (RRShareResult)handOffApps:(NSArray<NSString *> *)apps toPath:(NSString *)path;
+
+/* Lauscht bis -invalidate. handler läuft im Hauptthread, einmal je Programm. */
+- (nullable instancetype)initWithPath:(NSString *)path handler:(BOOL (^)(NSString *app))handler;
+- (void)invalidate;
+
+@end
+
+NS_ASSUME_NONNULL_END

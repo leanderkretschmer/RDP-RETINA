@@ -68,6 +68,24 @@ BOOL rr_settings_parse(rrContext* rr, int argc, char** argv, int* exitCode)
 			continue;
 		}
 
+		if ((i > 0) && rr_arg_is(arg, "app"))
+		{
+			/* /app: darf mehrfach stehen, FreeRDP bekommt nur die erste Angabe. */
+			const char* value = rr_arg_name(arg) + 3;
+			if (*value == ':')
+				value++;
+
+			char** tmp = realloc(rr->apps, (rr->appCount + 1) * sizeof(char*));
+			if (!tmp)
+				goto fail;
+			rr->apps = tmp;
+			rr->apps[rr->appCount] = _strdup(value);
+			if (!rr->apps[rr->appCount])
+				goto fail;
+			if (rr->appCount++ > 0)
+				continue;
+		}
+
 		if (i > 0)
 		{
 			if (rr_arg_is(arg, "size") || rr_arg_is(arg, "w") || rr_arg_is(arg, "h"))
@@ -104,6 +122,22 @@ void rr_settings_free(rrContext* rr)
 	free(rr->options);
 	rr->options = NULL;
 	rr->optionCount = 0;
+
+	for (size_t i = 0; i < rr->appCount; i++)
+		free(rr->apps[i]);
+	free(rr->apps);
+	rr->apps = NULL;
+	rr->appCount = 0;
+}
+
+size_t rr_app_count(rrContext* rr)
+{
+	return rr ? rr->appCount : 0;
+}
+
+const char* rr_app(rrContext* rr, size_t index)
+{
+	return (rr && (index < rr->appCount)) ? rr->apps[index] : NULL;
 }
 
 BOOL rr_multimon(rrContext* rr)

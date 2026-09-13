@@ -23,6 +23,7 @@
 		2004EFE082FC16E1F1BCFBCD /* RRRailController.m in Sources */ = {isa = PBXBuildFile; fileRef = EE5E78689E58B088F60AF308 /* RRRailController.m */; };
 		E42B90811266DB0614899599 /* RRRenderer.m in Sources */ = {isa = PBXBuildFile; fileRef = ACC94847D4E2B23F93CE8EBF /* RRRenderer.m */; };
 		A5DA60F7660737DFCBEF8FCD /* RRSession.m in Sources */ = {isa = PBXBuildFile; fileRef = DAB3C73E6C9FB2B52EACD8C4 /* RRSession.m */; };
+		A513625145A8B9E113FDFBA4 /* RRShare.m in Sources */ = {isa = PBXBuildFile; fileRef = 848412DD5B600EBB7BACB2A2 /* RRShare.m */; };
 		BF04E654BAACDD6D653A7472 /* RRTray.m in Sources */ = {isa = PBXBuildFile; fileRef = B60FD94DD60343A0EB0C284E /* RRTray.m */; };
 		F55E7AFD8989209CEC8AC49A /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 46051C27F61C6A9848E80800 /* main.m */; };
 		8C8CE326555DFE4769A8D7F4 /* RDP-Retina.icon in Resources */ = {isa = PBXBuildFile; fileRef = 67CBCBB72908B3C023A467E2 /* RDP-Retina.icon */; };
@@ -59,6 +60,8 @@
 		ACC94847D4E2B23F93CE8EBF /* RRRenderer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RRRenderer.m; sourceTree = "<group>"; };
 		2AA227717C1397F143E236D5 /* RRSession.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RRSession.h; sourceTree = "<group>"; };
 		DAB3C73E6C9FB2B52EACD8C4 /* RRSession.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RRSession.m; sourceTree = "<group>"; };
+		8AF04EB7C659EBCDA418F3FA /* RRShare.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RRShare.h; sourceTree = "<group>"; };
+		848412DD5B600EBB7BACB2A2 /* RRShare.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RRShare.m; sourceTree = "<group>"; };
 		0818F96AFBE44CAB4B225524 /* RRTray.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RRTray.h; sourceTree = "<group>"; };
 		B60FD94DD60343A0EB0C284E /* RRTray.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RRTray.m; sourceTree = "<group>"; };
 		46051C27F61C6A9848E80800 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
@@ -127,6 +130,8 @@
 				ACC94847D4E2B23F93CE8EBF /* RRRenderer.m */,
 				2AA227717C1397F143E236D5 /* RRSession.h */,
 				DAB3C73E6C9FB2B52EACD8C4 /* RRSession.m */,
+				8AF04EB7C659EBCDA418F3FA /* RRShare.h */,
+				848412DD5B600EBB7BACB2A2 /* RRShare.m */,
 				0818F96AFBE44CAB4B225524 /* RRTray.h */,
 				B60FD94DD60343A0EB0C284E /* RRTray.m */,
 				46051C27F61C6A9848E80800 /* main.m */,
@@ -226,6 +231,7 @@
 				2004EFE082FC16E1F1BCFBCD /* RRRailController.m in Sources */,
 				E42B90811266DB0614899599 /* RRRenderer.m in Sources */,
 				A5DA60F7660737DFCBEF8FCD /* RRSession.m in Sources */,
+				A513625145A8B9E113FDFBA4 /* RRShare.m in Sources */,
 				BF04E654BAACDD6D653A7472 /* RRTray.m in Sources */,
 				F55E7AFD8989209CEC8AC49A /* main.m in Sources */,
 			);
