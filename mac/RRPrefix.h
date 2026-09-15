@@ -8,9 +8,18 @@
  * REFIID nur in Prototypen nennen, den Typ vorfinden.
  *
  * Die C-Dateien des Kerns binden CoreFoundation nie ein und bleiben unberührt.
+ *
+ * Fehlt FreeRDP, scheitert sonst jede Datei einzeln an ihrem ersten Include. Der Präfix-Header
+ * geht jeder Datei voraus, auch den C-Dateien – hier steht deshalb eine verständliche Meldung.
  */
 #ifndef RR_PREFIX_H
 #define RR_PREFIX_H
+
+#ifdef __has_include
+#if !__has_include(<winpr/wtypes.h>)
+#error "FreeRDP 3 nicht gefunden (gesucht in vendor/freerdp, /opt/homebrew, /usr/local). Installieren: brew install freerdp"
+#endif
+#endif
 
 #if defined(__OBJC__)
 #define REFIID WINPR_REFIID

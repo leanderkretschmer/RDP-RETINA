@@ -20,6 +20,11 @@ Voraussetzungen: macOS 13 oder neuer, Xcode, FreeRDP 3 aus Homebrew.
 brew install freerdp
 ```
 
+Meldet Xcode „FreeRDP 3 nicht gefunden“ (ältere Stände: `'winpr/crt.h' file not found`), fehlt
+FreeRDP auf diesem Mac. Nach `brew install freerdp` liegen die Header unter
+`/opt/homebrew/include/freerdp3` (Apple Silicon) bzw. `/usr/local/include/freerdp3` (Intel);
+danach in Xcode *Product → Clean Build Folder* und neu bauen.
+
 **In Xcode:** `rdp-retina.xcodeproj` öffnen, Schema `rdp-retina`, *Run*. Beispielargumente
 stehen abgeschaltet im Schema (*Product → Scheme → Edit Scheme → Arguments*); das Kennwort
 fragt FreeRDP in der Xcode-Konsole ab.
