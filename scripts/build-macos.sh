@@ -2,8 +2,8 @@
 #
 # Baut rdp-retina.app ohne Xcode-Oberfläche.
 #
-# Voraussetzungen: Xcode (oder die Command Line Tools mit xcodebuild) und FreeRDP 3:
-#   brew install freerdp
+# Voraussetzung ist nur Xcode. Der erste Build baut FreeRDP und OpenSSL statisch mit
+# (scripts/build-freerdp-static.sh, einmalig 10 bis 20 Minuten).
 #
 set -euo pipefail
 

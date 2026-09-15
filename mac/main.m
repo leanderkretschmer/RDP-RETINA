@@ -42,10 +42,17 @@ int main(int argc, char *argv[])
 			return 1;
 		const int count = RRFilterArguments(argc, argv, args);
 
-		/* --createapp legt nur ein Applet an und verbindet sich nicht. */
+		/* --createapp legt nur ein Applet an und verbindet sich nicht. In der App Sandbox (Mac App
+		 * Store) geht das nicht: Dock-Einstellungen und andere Programme sind dort gesperrt. */
 		if (RRAppletRequested(count, args))
 		{
-			const int code = RRAppletMain(count, args);
+			int code = 1;
+			if (getenv("APP_SANDBOX_CONTAINER_ID"))
+				fprintf(stderr, "rdp-retina: --createapp gibt es in der App-Store-Fassung nicht. Die "
+				                "App Sandbox verbietet Einträge im Dock und das Starten anderer "
+				                "Programme.\n");
+			else
+				code = RRAppletMain(count, args);
 			free(args);
 			return code;
 		}

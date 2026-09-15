@@ -7,14 +7,16 @@ Hinzufügen oder Entfernen von Quelldateien einfach erneut ausführen:
 
     python3 scripts/gen-xcodeproj.py
 
-FreeRDP 3 wird gesucht in (erste Fundstelle gewinnt):
-    vendor/freerdp   eigener Build, z.B. mit VideoToolbox (scripts/build-freerdp-macos.sh)
-    /opt/homebrew    Homebrew auf Apple Silicon
-    /usr/local       Homebrew auf Intel
+FreeRDP 3 und OpenSSL werden statisch in die App gebaut (Mac App Store: nichts wird von außerhalb
+des Bundles geladen). Das erledigt der erste Build-Schritt mit scripts/build-freerdp-static.sh
+nach vendor/freerdp-static.
 
-Vor dem Kompilieren prüft ein Skript, ob FreeRDP da ist (siehe FREERDP_CHECK).
+Das Archiv für App Store Connect braucht ein Team; beim Erzeugen übernehmen:
+
+    RR_DEVELOPMENT_TEAM=ABCDE12345 python3 scripts/gen-xcodeproj.py
 """
 import hashlib
+import os
 import pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -27,37 +29,19 @@ FILE_TYPES = {
     ".h": "sourcecode.c.h",
     ".m": "sourcecode.c.objc",
     ".plist": "text.plist.xml",
+    ".entitlements": "text.plist.entitlements",
 }
 COMPILED = {".c", ".m"}
-PREFIXES = ["$(SRCROOT)/vendor/freerdp", "/opt/homebrew", "/usr/local"]
+FREERDP = "$(SRCROOT)/vendor/freerdp-static"
+ENTITLEMENTS = "mac/rdp-retina.entitlements"
 # App-Icon aus Icon Composer (Xcode 26) als <Name>.icon im Wurzelverzeichnis. actool macht
 # daraus Assets.car und für ältere macOS-Versionen eine .icns.
 ICON_TYPE = "folder.iconcomposer.icon"
 
-# Erster Build-Schritt. Ohne ihn scheitert jede Datei einzeln an ihrem ersten FreeRDP-Include
-# ("'winpr/crt.h' file not found"). Ist FreeRDP per Homebrew installiert, aber nicht nach
-# include/ verlinkt (Konflikt beim Verlinken, anderes Präfix), hängt das Skript es als
-# vendor/freerdp ein – dort sucht das Projekt zuerst.
-FREERDP_CHECK = """\
-for prefix in "${SRCROOT}/vendor/freerdp" /opt/homebrew /usr/local; do
-	if [ -f "${prefix}/include/winpr3/winpr/wtypes.h" ]; then
-		exit 0
-	fi
-done
-
-for brew in /opt/homebrew/bin/brew /usr/local/bin/brew; do
-	[ -x "$brew" ] || continue
-	prefix=$("$brew" --prefix freerdp 2>/dev/null) || continue
-	if [ -f "${prefix}/include/winpr3/winpr/wtypes.h" ] && [ ! -e "${SRCROOT}/vendor/freerdp" ] &&
-		[ ! -L "${SRCROOT}/vendor/freerdp" ]; then
-		mkdir -p "${SRCROOT}/vendor" && ln -s "$prefix" "${SRCROOT}/vendor/freerdp" || continue
-		echo "note: FreeRDP aus ${prefix} als vendor/freerdp eingehaengt"
-		exit 0
-	fi
-done
-
-echo "error: FreeRDP 3 nicht gefunden (gesucht in vendor/freerdp, /opt/homebrew, /usr/local). Im Terminal ausfuehren: brew install freerdp - danach erneut bauen."
-exit 1
+# Erster Build-Schritt: FreeRDP und OpenSSL statisch bauen. Beim ersten Mal 10 bis 20 Minuten,
+# danach vergleicht das Skript nur einen Stempel. Seine note:/error:-Zeilen zeigt Xcode an.
+FREERDP_BUILD = """\
+exec "${SRCROOT}/scripts/build-freerdp-static.sh"
 """
 
 
@@ -147,34 +131,40 @@ def project_settings(debug):
     return values
 
 
-def target_settings(icon):
+def target_settings(icon, debug):
     values = {
-        # FreeRDP aus Homebrew gibt es nur für die eigene Architektur.
-        "ARCHS": "$(NATIVE_ARCH_ACTUAL)",
-        "CODE_SIGN_IDENTITY": "-",
+        # FreeRDP liegt als Universal-Bibliothek vor (arm64 + x86_64).
+        "ARCHS": "$(ARCHS_STANDARD)",
+        # App Sandbox mit ausgehenden Verbindungen und Mikrofon (mac/rdp-retina.entitlements). Die
+        # ENABLE_*-Schalter spiegeln die Datei für Xcodes Ansicht „Signing & Capabilities“.
+        "CODE_SIGN_ENTITLEMENTS": ENTITLEMENTS,
+        "ENABLE_APP_SANDBOX": "YES",
+        "ENABLE_OUTGOING_NETWORK_CONNECTIONS": "YES",
+        "ENABLE_RESOURCE_ACCESS_AUDIO_INPUT": "YES",
+        "ENABLE_HARDENED_RUNTIME": "YES",
+        # Debug läuft ohne Team (ad hoc), das Archiv für App Store Connect braucht eines.
+        "CODE_SIGN_IDENTITY": "-" if debug else "Apple Development",
         "CODE_SIGN_STYLE": "Automatic",
+        "DEVELOPMENT_TEAM": os.environ.get("RR_DEVELOPMENT_TEAM", ""),
         "COMBINE_HIDPI_IMAGES": "YES",
         "CURRENT_PROJECT_VERSION": "1",
-        "DEVELOPMENT_TEAM": "",
-        # Homebrew-Bibliotheken sind nicht vom selben Team signiert.
-        "ENABLE_HARDENED_RUNTIME": "NO",
-        # Der FreeRDP-Prüfschritt liest außerhalb des Projekts und legt vendor/freerdp an.
+        # Der FreeRDP-Schritt lädt Quellen und schreibt nach vendor/ und build/.
         "ENABLE_USER_SCRIPT_SANDBOXING": "NO",
         "GCC_PREFIX_HEADER": "mac/RRPrefix.h",
         "GENERATE_INFOPLIST_FILE": "NO",
         "HEADER_SEARCH_PATHS": ["$(SRCROOT)/core"],
         # FreeRDP als System-Header: deren Warnungen (z.B. -Wambiguous-macro in winpr/stream.h)
         # gehören nicht zu diesem Projekt.
-        "SYSTEM_HEADER_SEARCH_PATHS": [
-            f"{p}/include/{lib}" for p in PREFIXES for lib in ("freerdp3", "winpr3")
-        ],
+        "SYSTEM_HEADER_SEARCH_PATHS": [f"{FREERDP}/include/freerdp3", f"{FREERDP}/include/winpr3"],
         "INFOPLIST_FILE": "mac/Info.plist",
-        "LD_RUNPATH_SEARCH_PATHS": ["$(inherited)", "@executable_path/../Frameworks"]
-        + [f"{p}/lib" for p in PREFIXES],
-        "LIBRARY_SEARCH_PATHS": [f"{p}/lib" for p in PREFIXES],
+        "LD_RUNPATH_SEARCH_PATHS": ["$(inherited)", "@executable_path/../Frameworks"],
         "MARKETING_VERSION": "0.1.0",
         "OTHER_LDFLAGS": [
-            "-lfreerdp-client3", "-lfreerdp3", "-lwinpr3",
+            # FreeRDP mit Kanälen und OpenSSL, dazu was FreeRDP vom System braucht
+            f"{FREERDP}/lib/librr-freerdp.a", "-lz",
+            "-framework", "CoreFoundation", "-framework", "SystemConfiguration",
+            "-framework", "CoreAudio", "-framework", "AudioToolbox", "-framework", "AVFoundation",
+            "-framework", "ApplicationServices",
             "-framework", "AppKit", "-framework", "Metal", "-framework", "QuartzCore",
             "-framework", "Carbon", "-framework", "IOKit",
             # Security: Kennwörter im Schlüsselbund, ImageIO: .icns für Applets
@@ -208,7 +198,7 @@ def main():
     sources_phase = oid("phase", "sources")
     frameworks_phase = oid("phase", "frameworks")
     resources_phase = oid("phase", "resources")
-    check_phase = oid("phase", "freerdp-check")
+    build_phase = oid("phase", "freerdp-build")
     project_list = oid("configlist", "project")
     target_list = oid("configlist", "target")
     configs = {(scope, cfg): oid("config", scope, cfg)
@@ -262,7 +252,7 @@ def main():
     w("/* Begin PBXNativeTarget section */\n")
     w(f"\t\t{target} /* {NAME} */ = {{\n\t\t\tisa = PBXNativeTarget;\n"
       f"\t\t\tbuildConfigurationList = {target_list} /* Build configuration list for PBXNativeTarget \"{NAME}\" */;\n"
-      f"\t\t\tbuildPhases = (\n\t\t\t\t{check_phase} /* FreeRDP prüfen */,\n"
+      f"\t\t\tbuildPhases = (\n\t\t\t\t{build_phase} /* FreeRDP bauen */,\n"
       f"\t\t\t\t{sources_phase} /* Sources */,\n\t\t\t\t{frameworks_phase} /* Frameworks */,\n"
       f"\t\t\t\t{resources_phase} /* Resources */,\n\t\t\t);\n\t\t\tbuildRules = (\n\t\t\t);\n"
       f"\t\t\tdependencies = (\n\t\t\t);\n\t\t\tname = {q(NAME)};\n\t\t\tproductName = {q(NAME)};\n"
@@ -291,13 +281,13 @@ def main():
     w("/* End PBXResourcesBuildPhase section */\n\n")
 
     w("/* Begin PBXShellScriptBuildPhase section */\n")
-    w(f"\t\t{check_phase} /* FreeRDP prüfen */ = {{\n\t\t\tisa = PBXShellScriptBuildPhase;\n"
+    w(f"\t\t{build_phase} /* FreeRDP bauen */ = {{\n\t\t\tisa = PBXShellScriptBuildPhase;\n"
       "\t\t\talwaysOutOfDate = 1;\n\t\t\tbuildActionMask = 2147483647;\n\t\t\tfiles = (\n\t\t\t);\n"
       "\t\t\tinputFileListPaths = (\n\t\t\t);\n\t\t\tinputPaths = (\n\t\t\t);\n"
-      f"\t\t\tname = {q('FreeRDP prüfen')};\n"
+      f"\t\t\tname = {q('FreeRDP bauen')};\n"
       "\t\t\toutputFileListPaths = (\n\t\t\t);\n\t\t\toutputPaths = (\n\t\t\t);\n"
       "\t\t\trunOnlyForDeploymentPostprocessing = 0;\n\t\t\tshellPath = /bin/sh;\n"
-      f"\t\t\tshellScript = {q_multiline(FREERDP_CHECK)};\n\t\t\tshowEnvVarsInLog = 0;\n\t\t}};\n")
+      f"\t\t\tshellScript = {q_multiline(FREERDP_BUILD)};\n\t\t\tshowEnvVarsInLog = 0;\n\t\t}};\n")
     w("/* End PBXShellScriptBuildPhase section */\n\n")
 
     w("/* Begin PBXSourcesBuildPhase section */\n")
@@ -315,7 +305,7 @@ def main():
           f"\t\t\tname = {cfg};\n\t\t}};\n")
     for cfg in ("Debug", "Release"):
         w(f"\t\t{configs[('target', cfg)]} /* {cfg} */ = {{\n\t\t\tisa = XCBuildConfiguration;\n"
-          f"\t\t\tbuildSettings = {{\n{settings_block(target_settings(icon), 4)}\t\t\t}};\n"
+          f"\t\t\tbuildSettings = {{\n{settings_block(target_settings(icon, cfg == 'Debug'), 4)}\t\t\t}};\n"
           f"\t\t\tname = {cfg};\n\t\t}};\n")
     w("/* End XCBuildConfiguration section */\n\n")
 

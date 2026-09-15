@@ -1,9 +1,8 @@
 #!/bin/sh
 #
-# Xcode Cloud führt dieses Skript nach dem Klonen aus. FreeRDP 3 kommt aus Homebrew,
-# das auf den Xcode-Cloud-Maschinen vorinstalliert ist; das Xcode-Projekt sucht die
-# Header und Bibliotheken unter /opt/homebrew bzw. /usr/local.
+# Xcode Cloud führt dieses Skript nach dem Klonen aus. Es baut FreeRDP und OpenSSL statisch vorab;
+# dasselbe erledigt sonst der erste Build-Schritt, hier bleibt das Build-Protokoll übersichtlicher.
 #
 set -eu
 
-brew install freerdp
+"$(dirname "$0")/../scripts/build-freerdp-static.sh"

@@ -14,47 +14,58 @@ Protokoll wird nicht neu geschrieben. Anforderungen und Hintergrund:
 
 ## Bauen
 
-Voraussetzungen: macOS 13 oder neuer, Xcode, FreeRDP 3 aus Homebrew.
-
-```sh
-brew install freerdp
-```
-
-Der erste Build-Schritt „FreeRDP prüfen“ sucht FreeRDP 3, bevor etwas kompiliert wird:
-
-- gefunden unter `vendor/freerdp`, `/opt/homebrew` (Apple Silicon) oder `/usr/local` (Intel):
-  weiter wie gewohnt
-- per Homebrew installiert, aber nicht nach `include/` verlinkt (etwa nach einem Konflikt beim
-  Verlinken): der Schritt hängt `$(brew --prefix freerdp)` als `vendor/freerdp` ein
-- gar nicht vorhanden: Abbruch mit „FreeRDP 3 nicht gefunden … brew install freerdp“
-
-Ältere Stände scheiterten stattdessen in jeder Datei mit `'winpr/crt.h' file not found`. Nach der
-Installation in Xcode *Product → Clean Build Folder* und neu bauen. Ob die Header da sind, zeigt
-`ls -d "$(brew --prefix freerdp)/include/winpr3"`.
+Voraussetzungen: macOS 13 oder neuer und Xcode – sonst nichts, auch kein Homebrew.
 
 **In Xcode:** `rdp-retina.xcodeproj` öffnen, Schema `rdp-retina`, *Run*. Beispielargumente
 stehen abgeschaltet im Schema (*Product → Scheme → Edit Scheme → Arguments*); das Kennwort
 fragt FreeRDP in der Xcode-Konsole ab.
+
+Der erste Build-Schritt „FreeRDP bauen“ (`scripts/build-freerdp-static.sh`) lädt FreeRDP 3.31.1,
+OpenSSL 3.5.8 und CMake – feste Versionen, gegen SHA-256 geprüft – und baut FreeRDP samt OpenSSL
+statisch für arm64 und x86_64 nach `vendor/freerdp-static`. Beim ersten Mal braucht das Internet
+und 10 bis 20 Minuten; danach vergleicht der Schritt nur noch einen Stempel. Ein anderes Xcode
+oder eine Änderung am Skript löst einen neuen Build aus. Protokolle liegen in
+`build/freerdp-static/logs`.
+
+**Ohne Mac geprüft.** Unter Linux lief das Skript vollständig durch: Downloads gegen die
+Prüfsummen, OpenSSL und FreeRDP statisch, zusammengefasst zu 23 MB; ein zweiter Lauf endet sofort.
+Der Prüf-Client, gegen genau diese Bibliothek gelinkt (`cmake -DRR_FREERDP_STATIC=<Präfix>`, ohne
+FreeRDP- oder OpenSSL-Laufzeitbibliotheken), bestand gegen den Testserver
+`tests/acceptance/multiapp.sh`: eine Verbindung, drei RemoteApps, Grafik über ClearCodec,
+Progressive und Alpha. Auf dem Mac sind Skript, Xcode-Build, Archiv und Sandbox ungeprüft.
+
+**Mac App Store / TestFlight:**
+
+1. In *Signing & Capabilities* das Team wählen. Wer das Projekt neu erzeugt, gibt es mit:
+   `RR_DEVELOPMENT_TEAM=<Team-ID> python3 scripts/gen-xcodeproj.py`
+2. *Product → Archive*, im Organizer *Distribute App → App Store Connect*.
+
+Die App bringt alles selbst mit und läuft in der App Sandbox (`mac/rdp-retina.entitlements`:
+ausgehende Verbindungen, Mikrofon). Debug-Builds werden ad hoc signiert und laufen ohne Team.
+Beim Hochladen fragt App Store Connect nach Verschlüsselung: RDP nutzt TLS über das eingebaute
+OpenSSL.
+
+Nicht in der App-Store-Fassung:
+
+| | |
+|---|---|
+| H.264 / AVC444 | FFmpeg dürfte nur dynamisch gelinkt in den App Store (LGPL), OpenH264 aus Quellen bringt keine Patentlizenz mit. Die Grafik läuft über GFX mit ClearCodec, Planar und Progressive; bei 5K nimmt der Server ohnehin kein H.264 (siehe *Erkenntnisse*). |
+| AAC-Ton | ebenfalls FFmpeg; der Ton kommt als PCM |
+| Applets (`--createapp`) | die App Sandbox verbietet Einträge im Dock und das Starten anderer Programme |
+| Smartcard, USB, Drucker, serielle und parallele Schnittstellen | nicht mitgebaut |
 
 **Im Terminal:**
 
 ```sh
 scripts/build-macos.sh          # baut nach build/xcode
 bin/rdp-retina /v:server ...    # startet die gebaute App
+
+# aus dem App Store installiert
+/Applications/rdp-retina.app/Contents/MacOS/rdp-retina /v:server ...
 ```
 
-**Xcode Cloud:** `ci_scripts/ci_post_clone.sh` installiert FreeRDP per Homebrew. Für ein
-Archiv muss in *Signing & Capabilities* ein Team gesetzt werden; lokal wird ad hoc
-signiert („Sign to Run Locally“). Die App lädt FreeRDP zur Laufzeit aus Homebrew – sie
-läuft also auf Macs, auf denen `brew install freerdp` ausgeführt wurde.
-
-Homebrew baut FreeRDP für das installierte macOS. Der Linker meldet deshalb, die
-Bibliotheken seien neuer als das Deployment-Ziel 13.0, und nennt nicht vorhandene
-Suchpfade (`/opt/homebrew/lib` auf Intel, `vendor/freerdp/lib` ohne eigenen Build). Beides
-ist harmlos; die gebaute App braucht dann aber das macOS, für das FreeRDP gebaut wurde.
-
-**Hardware-Dekodierung (W1):** `scripts/build-freerdp-macos.sh` baut FreeRDP mit
-VideoToolbox nach `vendor/freerdp`. Das Xcode-Projekt nimmt diesen Pfad vor Homebrew.
+**Xcode Cloud:** `ci_scripts/ci_post_clone.sh` baut FreeRDP vorab. Für das Archiv muss das Team
+im Projekt stehen.
 
 Das Xcode-Projekt wird aus den Quellen erzeugt. Nach dem Hinzufügen oder Entfernen von
 Dateien: `python3 scripts/gen-xcodeproj.py`.
@@ -80,7 +91,7 @@ Was der Client selbst festlegt:
 |---|---|
 | Sitzungsgröße | in **Pixeln** des Backing-Store: `/f` und RemoteApp = Bildschirm (5K: 5120×2880), ohne `/size` = größtes Fenster auf der nutzbaren Fläche, `/size:WxH` = wie angegeben, so groß wie der Bildschirm = Vollbild. Nie 1024×768. |
 | Skalierung | ohne `/scale` der Faktor des Bildschirms (Retina: 200 %), sonst wie angegeben |
-| Grafik | ohne `/gfx` wird H.264 4:4:4 angefordert |
+| Grafik | ohne `/gfx` GFX mit H.264 4:4:4 – enthält FreeRDP kein H.264 wie in der App-Store-Fassung, schaltet FreeRDP es ab und der Server nimmt ClearCodec und Progressive |
 | Tastatur | ohne `/kbd` das aktive macOS-Layout (Deutsch → 0x407) |
 | RemoteApp | Arbeitsbereich ohne Menüleiste und Dock (je Bildschirm), Symbole in hoher Auflösung |
 | Wiederverbinden | an, sofern nicht `/auto-reconnect` ausdrücklich angegeben ist |
@@ -155,6 +166,10 @@ um; Carbon-Aufrufe liegen getrennt in `mac/RRInputSource.m`.
 
 ## Applets für das Dock
 
+**Nicht in der App-Store-Fassung.** Die App Sandbox verbietet Einträge im Dock und das Starten
+anderer Programme; `--createapp` meldet das dort und bricht ab. Der Code bleibt für eine Fassung
+außerhalb des App Stores (Developer ID, ohne Sandbox) erhalten.
+
 Ein Applet ist ein kleines App-Bundle, das genau eine RemoteApp öffnet – im Dock mit einem
 Klick, im Finder mit einem Doppelklick:
 
@@ -195,7 +210,7 @@ Gemessen am 11.09.2026 gegen Windows Server 2025 (RTX 3080), Mac mit Studio Disp
 
 | Wunsch | Ergebnis |
 |---|---|
-| W1 VideoToolbox | `build-freerdp-macos.sh` baut; die App läuft damit (3840×2160, AVC444v2, Selbsttest 1:1). Wie viel die GPU übernimmt, ist nicht gemessen. |
+| W1 VideoToolbox | Mit einem FreeRDP-Build mit VideoToolbox gemessen: die App lief damit (3840×2160, AVC444v2, Selbsttest 1:1). Für den Mac App Store entfernt – die App enthält kein H.264 (siehe *Bauen*). |
 | W2 Zwischenablage | eingebaut (Text in beide Richtungen), nicht automatisch prüfbar |
 | W3 mehrere Bildschirme | Prüf-Client mit simuliertem zweitem Bildschirm (2560×1440 links neben 5K): Sitzung 7680×2880 über beide, ein links maximiertes Fenster liegt bei -2560,0 mit 2560×1440, Klicks treffen. Mit zwei echten Bildschirmen am Mac nicht getestet. |
 | W4 Wiederverbinden | `reconnect.sh`: Netz 20 s gesperrt und TCP-Verbindung abgerissen → der Client verbindet sich beim zweiten Versuch selbst neu, sobald das Netz wieder da ist, das Bild kommt wieder. Mit RemoteApp nicht getestet. |
@@ -269,6 +284,8 @@ Quelle); Mausbedienung, Tastatur, Zwischenablage und Tray sind am Gerät zu prü
   Faktor des primären Bildschirms umgerechnet.
 - Verschieben per Tastatur (Alt+Leertaste → Verschieben) wird sofort beendet.
 - Tray-Symbole: Klick und Kontextmenü, keine Sprechblasen.
+- App-Store-Fassung: kein H.264, kein AAC, keine Applets, keine Smartcard-, USB-, Drucker- oder
+  Schnittstellen-Umleitung (siehe *Bauen*).
 
 ## Ton und Mikrofon
 
@@ -288,24 +305,25 @@ statischen und als dynamischen Kanal, schaltet `rdpdr` dazu und nimmt auf macOS 
 Die Protokollzeile des Kerns nennt das Ergebnis, z.B. `… RemoteApp ja, Ton hier, Mikrofon aus`.
 Den Kanal selbst zeigt `/log-filters:com.freerdp.channels.rdpsnd.client:DEBUG`.
 
-**Format.** Der Client bietet jedes Serverformat an, das FreeRDPs Audiodekoder (FFmpeg) lesen
-oder das Gerät direkt spielen kann. Das macOS-Backend nimmt nur PCM mit 16 Bit Stereo; alles
-andere dekodiert FreeRDP vorher. Gemessen mit dem Prüf-Client gegen den Testserver, Standard
-ohne `/sound`, `Alarm01.wav` per PowerShell-RemoteApp abgespielt: Windows Server 2025
-verhandelt über den dynamischen Kanal (Qualitätsmodus 2) und schickt **AAC** – 241 Blöcke in
-5,6 s, einer je 23 ms mit rund 290 Byte. Ohne AAC-Dekoder bietet der Client nur an, was er
-abspielen kann; unkomprimiertes PCM braucht bis 1,4 Mbit/s.
+**Format.** Der Client bietet jedes Serverformat an, das FreeRDPs Audiodekoder lesen oder das
+Gerät direkt spielen kann. Das macOS-Backend nimmt nur PCM mit 16 Bit Stereo; alles andere
+dekodiert FreeRDP vorher. Gemessen mit dem Prüf-Client (FreeRDP mit FFmpeg) gegen den
+Testserver, Standard ohne `/sound`, `Alarm01.wav` per PowerShell-RemoteApp abgespielt: Windows
+Server 2025 verhandelt über den dynamischen Kanal (Qualitätsmodus 2) und schickt **AAC** – 241
+Blöcke in 5,6 s, einer je 23 ms mit rund 290 Byte. Die App-Store-Fassung enthält kein FFmpeg und
+bietet deshalb kein AAC an; unkomprimiertes PCM braucht bis 1,4 Mbit/s.
 
 **Mikrofon** (`/microphone`). FreeRDPs `audin`-Backend für macOS nimmt PCM über AudioQueue
 auf. macOS fragt beim ersten Mal nach der Erlaubnis; die Begründung steht in `mac/Info.plist`.
 Die Antwort kommt asynchron: Öffnet eine Windows-Anwendung das Mikrofon, bevor „Erlauben“
 geklickt ist, bleibt diese eine Aufnahme stumm. Abgelehnt lässt es sich unter
-*Systemeinstellungen → Datenschutz & Sicherheit → Mikrofon* wieder freigeben. Wer die App mit
-Hardened Runtime archiviert, braucht zusätzlich `com.apple.security.device.audio-input`.
+*Systemeinstellungen → Datenschutz & Sicherheit → Mikrofon* wieder freigeben. Die Berechtigung
+`com.apple.security.device.audio-input` für Sandbox und Hardened Runtime steht in
+`mac/rdp-retina.entitlements`.
 
-**Eigener FreeRDP-Build.** `scripts/build-freerdp-macos.sh` baut das macOS-Audio
-(`WITH_MACAUDIO`) und die FFmpeg-Audiodekoder (`WITH_DSP_FFMPEG`) ausdrücklich mit.
+**FreeRDP-Build.** `scripts/build-freerdp-static.sh` baut das macOS-Audio (`WITH_MACAUDIO`) mit,
+FFmpeg nicht.
 
 **Nicht geprüft.** Der Mac war während der Umsetzung nicht erreichbar. Offen sind dort: der Ton
-hörbar am Gerät, dass Homebrews FreeRDP das Backend `mac` enthält, und das Mikrofon. Unter Linux
-hat der Prüf-Client nur das Backend `fake`; das Mikrofon lässt sich dort nicht prüfen.
+hörbar am Gerät und das Mikrofon samt Rückfrage von macOS. Unter Linux hat der Prüf-Client nur das
+Backend `fake`; das Mikrofon lässt sich dort nicht prüfen.

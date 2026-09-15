@@ -7,6 +7,7 @@
 #import "RRShare.h"
 
 #include <errno.h>
+#include <fcntl.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/un.h>
@@ -26,16 +27,41 @@ static uint64_t RRShareHash(NSString *text)
 	return hash;
 }
 
-static BOOL RRShareAddress(NSString *path, struct sockaddr_un *address)
+/* Führt op mit der Adresse des Sockets aus. sun_path fasst nur 104 Byte, und in der App Sandbox
+ * liegt $TMPDIR tief im Container. Passt der volle Pfad nicht, arbeitet op relativ zum
+ * Verzeichnis. chdir gilt für den ganzen Prozess – rdp-retina ruft das nur im Hauptthread auf,
+ * bevor FreeRDP seine Threads startet. */
+static int RRShareAt(NSString *path, int (^op)(const struct sockaddr_un *address))
 {
-	memset(address, 0, sizeof(*address));
-	address->sun_family = AF_UNIX;
+	struct sockaddr_un address;
+	memset(&address, 0, sizeof(address));
+	address.sun_family = AF_UNIX;
 
-	const char *p = path.fileSystemRepresentation;
-	if (strlen(p) >= sizeof(address->sun_path))
-		return NO;
-	strlcpy(address->sun_path, p, sizeof(address->sun_path));
-	return YES;
+	const char *full = path.fileSystemRepresentation;
+	if (strlen(full) < sizeof(address.sun_path))
+	{
+		strlcpy(address.sun_path, full, sizeof(address.sun_path));
+		return op(&address);
+	}
+
+	const char *name = path.lastPathComponent.fileSystemRepresentation;
+	if (strlen(name) >= sizeof(address.sun_path))
+		return -1;
+	strlcpy(address.sun_path, name, sizeof(address.sun_path));
+
+	const int cwd = open(".", O_RDONLY | O_CLOEXEC);
+	if (cwd < 0)
+		return -1;
+
+	int result = -1;
+	if (chdir(path.stringByDeletingLastPathComponent.fileSystemRepresentation) == 0)
+	{
+		result = op(&address);
+		if (fchdir(cwd) != 0)
+			result = -1;
+	}
+	close(cwd);
+	return result;
 }
 
 static void RRShareTimeout(int fd, long seconds)
@@ -108,18 +134,17 @@ static NSArray<NSString *> *RRShareReadLines(int fd)
 	                                           freerdp_settings_get_uint32(settings, FreeRDP_ServerPort),
 	                                           domain ?: "", user ?: ""]
 	                    .lowercaseString;
-	NSString *name = [NSString stringWithFormat:@"rdp-retina-%016llx.sock", RRShareHash(key)];
+	/* kurz, siehe RRShareAt */
+	NSString *name = [NSString stringWithFormat:@"rr-%016llx", RRShareHash(key)];
 
-	/* $TMPDIR gehört nur dem Benutzer */
-	NSString *path = [NSTemporaryDirectory() stringByAppendingPathComponent:name];
-	struct sockaddr_un address;
-	return RRShareAddress(path, &address) ? path : nil;
+	/* $TMPDIR gehört nur dem Benutzer; in der App Sandbox liegt es im Container der App, den alle
+	 * Instanzen teilen. */
+	return [NSTemporaryDirectory() stringByAppendingPathComponent:name];
 }
 
 + (RRShareResult)handOffApps:(NSArray<NSString *> *)apps toPath:(NSString *)path
 {
-	struct sockaddr_un address;
-	if ((apps.count == 0) || !RRShareAddress(path, &address))
+	if (apps.count == 0)
 		return RRShareNoInstance;
 
 	const int fd = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -127,7 +152,10 @@ static NSArray<NSString *> *RRShareReadLines(int fd)
 		return RRShareNoInstance;
 
 	/* Kein Zuhörer (auch ein übrig gebliebener Socket): selbst verbinden */
-	if (connect(fd, (struct sockaddr *)&address, sizeof(address)) != 0)
+	const int connected = RRShareAt(path, ^int(const struct sockaddr_un *address) {
+		return connect(fd, (const struct sockaddr *)address, sizeof(*address));
+	});
+	if (connected != 0)
 	{
 		close(fd);
 		return RRShareNoInstance;
@@ -159,18 +187,18 @@ static NSArray<NSString *> *RRShareReadLines(int fd)
 	if (!self)
 		return nil;
 
-	struct sockaddr_un address;
-	if (!RRShareAddress(path, &address))
-		return nil;
-
 	const int fd = socket(AF_UNIX, SOCK_STREAM, 0);
 	if (fd < 0)
 		return nil;
 
 	/* Ein übrig gebliebener Socket einer beendeten Instanz – eine lebende hätte übernommen. */
-	(void)unlink(address.sun_path);
-	if ((bind(fd, (struct sockaddr *)&address, sizeof(address)) != 0) ||
-	    (chmod(address.sun_path, S_IRUSR | S_IWUSR) != 0) || (listen(fd, 8) != 0))
+	(void)unlink(path.fileSystemRepresentation);
+	const int bound = RRShareAt(path, ^int(const struct sockaddr_un *address) {
+		if (bind(fd, (const struct sockaddr *)address, sizeof(*address)) != 0)
+			return -1;
+		return chmod(address->sun_path, S_IRUSR | S_IWUSR);
+	});
+	if ((bound != 0) || (listen(fd, 8) != 0))
 	{
 		close(fd);
 		return nil;

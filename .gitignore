@@ -5,7 +5,7 @@
 /build/
 /build-*/
 
-# Eigener FreeRDP-Build für macOS (scripts/build-freerdp-macos.sh)
+# FreeRDP und OpenSSL, statisch gebaut (scripts/build-freerdp-static.sh)
 /vendor/
 
 # Xcode, persönlich

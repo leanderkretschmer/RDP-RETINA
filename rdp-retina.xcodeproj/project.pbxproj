@@ -71,6 +71,7 @@
 		0818F96AFBE44CAB4B225524 /* RRTray.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RRTray.h; sourceTree = "<group>"; };
 		B60FD94DD60343A0EB0C284E /* RRTray.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RRTray.m; sourceTree = "<group>"; };
 		46051C27F61C6A9848E80800 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
+		9825AA2B90B20DF04E5A79E0 /* rdp-retina.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "rdp-retina.entitlements"; sourceTree = "<group>"; };
 		67CBCBB72908B3C023A467E2 /* RDP-Retina.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = "RDP-Retina.icon"; sourceTree = "<group>"; };
 		50178A953A82BB4E518CA119 /* rdp-retina.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "rdp-retina.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -145,6 +146,7 @@
 				0818F96AFBE44CAB4B225524 /* RRTray.h */,
 				B60FD94DD60343A0EB0C284E /* RRTray.m */,
 				46051C27F61C6A9848E80800 /* main.m */,
+				9825AA2B90B20DF04E5A79E0 /* rdp-retina.entitlements */,
 			);
 			path = mac;
 			sourceTree = "<group>";
@@ -164,7 +166,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = AFCC775E8C2393B8C5F83E67 /* Build configuration list for PBXNativeTarget "rdp-retina" */;
 			buildPhases = (
-				79ABD951AF23E4FBADE77B66 /* FreeRDP prüfen */,
+				096CAF55B259F00EDFF8B112 /* FreeRDP bauen */,
 				7715E746A3732ADC44AEEA9A /* Sources */,
 				050BD13606CE9C23BB9C2CB2 /* Frameworks */,
 				97626131F303CBCAC809E4CE /* Resources */,
@@ -222,7 +224,7 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		79ABD951AF23E4FBADE77B66 /* FreeRDP prüfen */ = {
+		096CAF55B259F00EDFF8B112 /* FreeRDP bauen */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -232,14 +234,14 @@
 			);
 			inputPaths = (
 			);
-			name = "FreeRDP prüfen";
+			name = "FreeRDP bauen";
 			outputFileListPaths = (
 			);
 			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "for prefix in \"${SRCROOT}/vendor/freerdp\" /opt/homebrew /usr/local; do\n\tif [ -f \"${prefix}/include/winpr3/winpr/wtypes.h\" ]; then\n\t\texit 0\n\tfi\ndone\n\nfor brew in /opt/homebrew/bin/brew /usr/local/bin/brew; do\n\t[ -x \"$brew\" ] || continue\n\tprefix=$(\"$brew\" --prefix freerdp 2>/dev/null) || continue\n\tif [ -f \"${prefix}/include/winpr3/winpr/wtypes.h\" ] && [ ! -e \"${SRCROOT}/vendor/freerdp\" ] &&\n\t\t[ ! -L \"${SRCROOT}/vendor/freerdp\" ]; then\n\t\tmkdir -p \"${SRCROOT}/vendor\" && ln -s \"$prefix\" \"${SRCROOT}/vendor/freerdp\" || continue\n\t\techo \"note: FreeRDP aus ${prefix} als vendor/freerdp eingehaengt\"\n\t\texit 0\n\tfi\ndone\n\necho \"error: FreeRDP 3 nicht gefunden (gesucht in vendor/freerdp, /opt/homebrew, /usr/local). Im Terminal ausfuehren: brew install freerdp - danach erneut bauen.\"\nexit 1\n";
+			shellScript = "exec \"${SRCROOT}/scripts/build-freerdp-static.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */
@@ -374,14 +376,18 @@
 		62B016D1EA3B6D6189BEAF13 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = "$(NATIVE_ARCH_ACTUAL)";
+				ARCHS = "$(ARCHS_STANDARD)";
 				ASSETCATALOG_COMPILER_APPICON_NAME = "RDP-Retina";
+				CODE_SIGN_ENTITLEMENTS = "mac/rdp-retina.entitlements";
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
-				ENABLE_HARDENED_RUNTIME = NO;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_PREFIX_HEADER = mac/RRPrefix.h;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -392,20 +398,23 @@
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
-					"$(SRCROOT)/vendor/freerdp/lib",
-					/opt/homebrew/lib,
-					/usr/local/lib,
-				);
-				LIBRARY_SEARCH_PATHS = (
-					"$(SRCROOT)/vendor/freerdp/lib",
-					/opt/homebrew/lib,
-					/usr/local/lib,
 				);
 				MARKETING_VERSION = 0.1.0;
 				OTHER_LDFLAGS = (
-					"-lfreerdp-client3",
-					"-lfreerdp3",
-					"-lwinpr3",
+					"$(SRCROOT)/vendor/freerdp-static/lib/librr-freerdp.a",
+					"-lz",
+					"-framework",
+					CoreFoundation,
+					"-framework",
+					SystemConfiguration,
+					"-framework",
+					CoreAudio,
+					"-framework",
+					AudioToolbox,
+					"-framework",
+					AVFoundation,
+					"-framework",
+					ApplicationServices,
 					"-framework",
 					AppKit,
 					"-framework",
@@ -424,12 +433,8 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "com.cratchmere.rdp-retina";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SYSTEM_HEADER_SEARCH_PATHS = (
-					"$(SRCROOT)/vendor/freerdp/include/freerdp3",
-					"$(SRCROOT)/vendor/freerdp/include/winpr3",
-					/opt/homebrew/include/freerdp3,
-					/opt/homebrew/include/winpr3,
-					/usr/local/include/freerdp3,
-					/usr/local/include/winpr3,
+					"$(SRCROOT)/vendor/freerdp-static/include/freerdp3",
+					"$(SRCROOT)/vendor/freerdp-static/include/winpr3",
 				);
 			};
 			name = Debug;
@@ -437,14 +442,18 @@
 		04CB42321259FD3210DDED26 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = "$(NATIVE_ARCH_ACTUAL)";
+				ARCHS = "$(ARCHS_STANDARD)";
 				ASSETCATALOG_COMPILER_APPICON_NAME = "RDP-Retina";
-				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_ENTITLEMENTS = "mac/rdp-retina.entitlements";
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
-				ENABLE_HARDENED_RUNTIME = NO;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_PREFIX_HEADER = mac/RRPrefix.h;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -455,20 +464,23 @@
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
-					"$(SRCROOT)/vendor/freerdp/lib",
-					/opt/homebrew/lib,
-					/usr/local/lib,
-				);
-				LIBRARY_SEARCH_PATHS = (
-					"$(SRCROOT)/vendor/freerdp/lib",
-					/opt/homebrew/lib,
-					/usr/local/lib,
 				);
 				MARKETING_VERSION = 0.1.0;
 				OTHER_LDFLAGS = (
-					"-lfreerdp-client3",
-					"-lfreerdp3",
-					"-lwinpr3",
+					"$(SRCROOT)/vendor/freerdp-static/lib/librr-freerdp.a",
+					"-lz",
+					"-framework",
+					CoreFoundation,
+					"-framework",
+					SystemConfiguration,
+					"-framework",
+					CoreAudio,
+					"-framework",
+					AudioToolbox,
+					"-framework",
+					AVFoundation,
+					"-framework",
+					ApplicationServices,
 					"-framework",
 					AppKit,
 					"-framework",
@@ -487,12 +499,8 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "com.cratchmere.rdp-retina";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SYSTEM_HEADER_SEARCH_PATHS = (
-					"$(SRCROOT)/vendor/freerdp/include/freerdp3",
-					"$(SRCROOT)/vendor/freerdp/include/winpr3",
-					/opt/homebrew/include/freerdp3,
-					/opt/homebrew/include/winpr3,
-					/usr/local/include/freerdp3,
-					/usr/local/include/winpr3,
+					"$(SRCROOT)/vendor/freerdp-static/include/freerdp3",
+					"$(SRCROOT)/vendor/freerdp-static/include/winpr3",
 				);
 			};
 			name = Release;

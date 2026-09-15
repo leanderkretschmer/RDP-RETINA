@@ -17,7 +17,7 @@
 
 #ifdef __has_include
 #if !__has_include(<winpr/wtypes.h>)
-#error "FreeRDP 3 nicht gefunden (gesucht in vendor/freerdp, /opt/homebrew, /usr/local). Installieren: brew install freerdp"
+#error "FreeRDP 3 nicht gefunden (vendor/freerdp-static). Das legt der erste Build-Schritt „FreeRDP bauen“ an – seine Meldungen und build/freerdp-static/logs zeigen, woran es scheitert."
 #endif
 #endif
 

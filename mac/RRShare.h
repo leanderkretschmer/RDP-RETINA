@@ -20,7 +20,7 @@ typedef NS_ENUM(NSInteger, RRShareResult) {
 
 @interface RRShare : NSObject
 
-/* Socket für Server, Port, Domäne und Benutzer; nil ohne Server oder bei zu langem Pfad. */
+/* Socket für Server, Port, Domäne und Benutzer; nil ohne Server. */
 + (nullable NSString *)socketPathForSettings:(const rdpSettings *)settings;
 
 + (RRShareResult)handOffApps:(NSArray<NSString *> *)apps toPath:(NSString *)path;
