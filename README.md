@@ -20,10 +20,17 @@ Voraussetzungen: macOS 13 oder neuer, Xcode, FreeRDP 3 aus Homebrew.
 brew install freerdp
 ```
 
-Meldet Xcode „FreeRDP 3 nicht gefunden“ (ältere Stände: `'winpr/crt.h' file not found`), fehlt
-FreeRDP auf diesem Mac. Nach `brew install freerdp` liegen die Header unter
-`/opt/homebrew/include/freerdp3` (Apple Silicon) bzw. `/usr/local/include/freerdp3` (Intel);
-danach in Xcode *Product → Clean Build Folder* und neu bauen.
+Der erste Build-Schritt „FreeRDP prüfen“ sucht FreeRDP 3, bevor etwas kompiliert wird:
+
+- gefunden unter `vendor/freerdp`, `/opt/homebrew` (Apple Silicon) oder `/usr/local` (Intel):
+  weiter wie gewohnt
+- per Homebrew installiert, aber nicht nach `include/` verlinkt (etwa nach einem Konflikt beim
+  Verlinken): der Schritt hängt `$(brew --prefix freerdp)` als `vendor/freerdp` ein
+- gar nicht vorhanden: Abbruch mit „FreeRDP 3 nicht gefunden … brew install freerdp“
+
+Ältere Stände scheiterten stattdessen in jeder Datei mit `'winpr/crt.h' file not found`. Nach der
+Installation in Xcode *Product → Clean Build Folder* und neu bauen. Ob die Header da sind, zeigt
+`ls -d "$(brew --prefix freerdp)/include/winpr3"`.
 
 **In Xcode:** `rdp-retina.xcodeproj` öffnen, Schema `rdp-retina`, *Run*. Beispielargumente
 stehen abgeschaltet im Schema (*Product → Scheme → Edit Scheme → Arguments*); das Kennwort

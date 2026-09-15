@@ -11,6 +11,8 @@ FreeRDP 3 wird gesucht in (erste Fundstelle gewinnt):
     vendor/freerdp   eigener Build, z.B. mit VideoToolbox (scripts/build-freerdp-macos.sh)
     /opt/homebrew    Homebrew auf Apple Silicon
     /usr/local       Homebrew auf Intel
+
+Vor dem Kompilieren prüft ein Skript, ob FreeRDP da ist (siehe FREERDP_CHECK).
 """
 import hashlib
 import pathlib
@@ -32,6 +34,32 @@ PREFIXES = ["$(SRCROOT)/vendor/freerdp", "/opt/homebrew", "/usr/local"]
 # daraus Assets.car und für ältere macOS-Versionen eine .icns.
 ICON_TYPE = "folder.iconcomposer.icon"
 
+# Erster Build-Schritt. Ohne ihn scheitert jede Datei einzeln an ihrem ersten FreeRDP-Include
+# ("'winpr/crt.h' file not found"). Ist FreeRDP per Homebrew installiert, aber nicht nach
+# include/ verlinkt (Konflikt beim Verlinken, anderes Präfix), hängt das Skript es als
+# vendor/freerdp ein – dort sucht das Projekt zuerst.
+FREERDP_CHECK = """\
+for prefix in "${SRCROOT}/vendor/freerdp" /opt/homebrew /usr/local; do
+	if [ -f "${prefix}/include/winpr3/winpr/wtypes.h" ]; then
+		exit 0
+	fi
+done
+
+for brew in /opt/homebrew/bin/brew /usr/local/bin/brew; do
+	[ -x "$brew" ] || continue
+	prefix=$("$brew" --prefix freerdp 2>/dev/null) || continue
+	if [ -f "${prefix}/include/winpr3/winpr/wtypes.h" ] && [ ! -e "${SRCROOT}/vendor/freerdp" ] &&
+		[ ! -L "${SRCROOT}/vendor/freerdp" ]; then
+		mkdir -p "${SRCROOT}/vendor" && ln -s "$prefix" "${SRCROOT}/vendor/freerdp" || continue
+		echo "note: FreeRDP aus ${prefix} als vendor/freerdp eingehaengt"
+		exit 0
+	fi
+done
+
+echo "error: FreeRDP 3 nicht gefunden (gesucht in vendor/freerdp, /opt/homebrew, /usr/local). Im Terminal ausfuehren: brew install freerdp - danach erneut bauen."
+exit 1
+"""
+
 
 def oid(*parts):
     return hashlib.md5("/".join((NAME,) + parts).encode()).hexdigest()[:24].upper()
@@ -42,6 +70,12 @@ def q(value):
     if value and all(c.isalnum() or c in "._/" for c in value):
         return value
     return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def q_multiline(value):
+    """Mehrzeiliger Wert (Skript) für project.pbxproj, wie Xcode ihn schreibt."""
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    return '"' + escaped.replace("\n", "\\n").replace("\t", "\\t") + '"'
 
 
 def setting(key, value, indent):
@@ -124,6 +158,8 @@ def target_settings(icon):
         "DEVELOPMENT_TEAM": "",
         # Homebrew-Bibliotheken sind nicht vom selben Team signiert.
         "ENABLE_HARDENED_RUNTIME": "NO",
+        # Der FreeRDP-Prüfschritt liest außerhalb des Projekts und legt vendor/freerdp an.
+        "ENABLE_USER_SCRIPT_SANDBOXING": "NO",
         "GCC_PREFIX_HEADER": "mac/RRPrefix.h",
         "GENERATE_INFOPLIST_FILE": "NO",
         "HEADER_SEARCH_PATHS": ["$(SRCROOT)/core"],
@@ -172,6 +208,7 @@ def main():
     sources_phase = oid("phase", "sources")
     frameworks_phase = oid("phase", "frameworks")
     resources_phase = oid("phase", "resources")
+    check_phase = oid("phase", "freerdp-check")
     project_list = oid("configlist", "project")
     target_list = oid("configlist", "target")
     configs = {(scope, cfg): oid("config", scope, cfg)
@@ -225,7 +262,8 @@ def main():
     w("/* Begin PBXNativeTarget section */\n")
     w(f"\t\t{target} /* {NAME} */ = {{\n\t\t\tisa = PBXNativeTarget;\n"
       f"\t\t\tbuildConfigurationList = {target_list} /* Build configuration list for PBXNativeTarget \"{NAME}\" */;\n"
-      f"\t\t\tbuildPhases = (\n\t\t\t\t{sources_phase} /* Sources */,\n\t\t\t\t{frameworks_phase} /* Frameworks */,\n"
+      f"\t\t\tbuildPhases = (\n\t\t\t\t{check_phase} /* FreeRDP prüfen */,\n"
+      f"\t\t\t\t{sources_phase} /* Sources */,\n\t\t\t\t{frameworks_phase} /* Frameworks */,\n"
       f"\t\t\t\t{resources_phase} /* Resources */,\n\t\t\t);\n\t\t\tbuildRules = (\n\t\t\t);\n"
       f"\t\t\tdependencies = (\n\t\t\t);\n\t\t\tname = {q(NAME)};\n\t\t\tproductName = {q(NAME)};\n"
       f"\t\t\tproductReference = {product} /* {NAME}.app */;\n"
@@ -251,6 +289,16 @@ def main():
       f"\t\t\tbuildActionMask = 2147483647;\n\t\t\tfiles = (\n{resources}\t\t\t);\n"
       "\t\t\trunOnlyForDeploymentPostprocessing = 0;\n\t\t};\n")
     w("/* End PBXResourcesBuildPhase section */\n\n")
+
+    w("/* Begin PBXShellScriptBuildPhase section */\n")
+    w(f"\t\t{check_phase} /* FreeRDP prüfen */ = {{\n\t\t\tisa = PBXShellScriptBuildPhase;\n"
+      "\t\t\talwaysOutOfDate = 1;\n\t\t\tbuildActionMask = 2147483647;\n\t\t\tfiles = (\n\t\t\t);\n"
+      "\t\t\tinputFileListPaths = (\n\t\t\t);\n\t\t\tinputPaths = (\n\t\t\t);\n"
+      f"\t\t\tname = {q('FreeRDP prüfen')};\n"
+      "\t\t\toutputFileListPaths = (\n\t\t\t);\n\t\t\toutputPaths = (\n\t\t\t);\n"
+      "\t\t\trunOnlyForDeploymentPostprocessing = 0;\n\t\t\tshellPath = /bin/sh;\n"
+      f"\t\t\tshellScript = {q_multiline(FREERDP_CHECK)};\n\t\t\tshowEnvVarsInLog = 0;\n\t\t}};\n")
+    w("/* End PBXShellScriptBuildPhase section */\n\n")
 
     w("/* Begin PBXSourcesBuildPhase section */\n")
     sources = "".join(f"\t\t\t\t{oid('build', g, n)} /* {n} in Sources */,\n"
