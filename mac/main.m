@@ -7,6 +7,7 @@
  */
 #import <AppKit/AppKit.h>
 
+#import "RRApplet.h"
 #import "RRApplication.h"
 #import "RRSession.h"
 
@@ -40,6 +41,14 @@ int main(int argc, char *argv[])
 		if (!args)
 			return 1;
 		const int count = RRFilterArguments(argc, argv, args);
+
+		/* --createapp legt nur ein Applet an und verbindet sich nicht. */
+		if (RRAppletRequested(count, args))
+		{
+			const int code = RRAppletMain(count, args);
+			free(args);
+			return code;
+		}
 
 		[RRApplication sharedApplication];
 

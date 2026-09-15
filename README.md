@@ -146,6 +146,33 @@ Pufferkoordinate öffnet dort das Kontextmenü, ein maximiertes RemoteApp-Fenste
 `mac/RRPrefix.h` bindet WinPR in jeder Objective-C-Datei zuerst ein und benennt den Typ
 um; Carbon-Aufrufe liegen getrennt in `mac/RRInputSource.m`.
 
+## Applets für das Dock
+
+Ein Applet ist ein kleines App-Bundle, das genau eine RemoteApp öffnet – im Dock mit einem
+Klick, im Finder mit einem Doppelklick:
+
+```sh
+bin/rdp-retina --createapp /v:192.168.0.0 /u:Administrator /p:Kennwort \
+	'/app:||notepad' --appname=Editor --icon=~/Bilder/editor.png
+```
+
+Daraus entsteht `~/Applications/Editor.app`:
+
+| | |
+|---|---|
+| Start | `open -n -b com.cratchmere.rdp-retina --args …` mit den gespeicherten Argumenten. Läuft schon eine Verbindung zu diesem Server und Benutzer, übernimmt sie das Programm (siehe *Mehrere RemoteApps in einer Sitzung*). |
+| Kennwort | steht **nicht** im Bundle, sondern als generisches Kennwort im Anmelde-Schlüsselbund (Dienst `rdp-retina`, Konto `[domäne\]benutzer@host`). Ohne `/p:` holt rdp-retina es von dort; beim ersten Zugriff fragt macOS einmal nach der Erlaubnis. |
+| Symbol | `--icon=` nimmt eine Datei oder eine `http(s)`-Adresse (PNG, JPEG, ICNS, PDF) und schreibt daraus eine `.icns` von 16 bis 1024 Pixeln samt @2x. Ohne Angabe das Symbol von rdp-retina. |
+| Zertifikat | ohne eigenes `/cert:` bekommt das Applet `/cert:tofu`, weil es keine Rückfrage im Terminal stellen kann |
+| Name | `--appname=`, sonst `name:` aus `/app:`, sonst das Programm (`||notepad` → „notepad“) |
+| Weiteres | `--nodock` legt es nicht ins Dock, `--dest=` wählt einen anderen Ordner als `~/Applications`. Alle übrigen Argumente (`/multimon`, `/scale:180`, …) gehen unverändert ins Applet. |
+
+`/app:` darf wie oben ohne `program:` geschrieben werden. Überschrieben werden nur eigene
+Applets, andere Bundles bleiben unangetastet.
+
+Entfernen: Symbol aus dem Dock ziehen, `~/Applications/<Name>.app` löschen und bei Bedarf
+`security delete-generic-password -s rdp-retina -a '<konto>'`.
+
 ## Abnahme
 
 Gemessen am 11.09.2026 gegen Windows Server 2025 (RTX 3080), Mac mit Studio Display 5K.

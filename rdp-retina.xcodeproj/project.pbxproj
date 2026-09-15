@@ -13,8 +13,10 @@
 		7A36FE0F98517231780157E2 /* rr_input.c in Sources */ = {isa = PBXBuildFile; fileRef = B7D09CC2199E27D817A7E929 /* rr_input.c */; };
 		CC8FACED55714BA2B7309F21 /* rr_rail.c in Sources */ = {isa = PBXBuildFile; fileRef = 5728D27A1F3C6C280A6CF88C /* rr_rail.c */; };
 		B9035079C185A22D1F2AA2B3 /* rr_settings.c in Sources */ = {isa = PBXBuildFile; fileRef = 2573F6A0CA67A88F2B892C46 /* rr_settings.c */; };
+		C5D88BA5E8A07026C0E6454A /* RRApplet.m in Sources */ = {isa = PBXBuildFile; fileRef = E5397DF04100EEE8BA11FEE8 /* RRApplet.m */; };
 		E793591DABE73CD993FF4E6F /* RRApplication.m in Sources */ = {isa = PBXBuildFile; fileRef = 9836859AEBF87021F65C6BCB /* RRApplication.m */; };
 		B39E12ECE963889B4B8CBF30 /* RRClipboard.m in Sources */ = {isa = PBXBuildFile; fileRef = 3FF02D8BDBA096C8296F3512 /* RRClipboard.m */; };
+		129E4B7786808E2BBC09F1F4 /* RRCredentials.m in Sources */ = {isa = PBXBuildFile; fileRef = 5E026029BD4EB628AD804E1F /* RRCredentials.m */; };
 		CD0C6DFFF99912FA3839C916 /* RRCursor.m in Sources */ = {isa = PBXBuildFile; fileRef = 89F331CE11FBF8FDA1BC2333 /* RRCursor.m */; };
 		6EC6312B814F812459ACCAAC /* RRDesktopController.m in Sources */ = {isa = PBXBuildFile; fileRef = 5A69F5B6A738AAF4C0A8AB4F /* RRDesktopController.m */; };
 		0693818E6BF2A9216A7F600A /* RRInputSource.m in Sources */ = {isa = PBXBuildFile; fileRef = 4CDBB73A9D7BBF9321490854 /* RRInputSource.m */; };
@@ -39,10 +41,14 @@
 		5728D27A1F3C6C280A6CF88C /* rr_rail.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = rr_rail.c; sourceTree = "<group>"; };
 		2573F6A0CA67A88F2B892C46 /* rr_settings.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = rr_settings.c; sourceTree = "<group>"; };
 		62191E95F20DC16A08B06229 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		D5D1D665253612EE8C12A1CB /* RRApplet.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RRApplet.h; sourceTree = "<group>"; };
+		E5397DF04100EEE8BA11FEE8 /* RRApplet.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RRApplet.m; sourceTree = "<group>"; };
 		492E23215CA14D093A4F47DB /* RRApplication.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RRApplication.h; sourceTree = "<group>"; };
 		9836859AEBF87021F65C6BCB /* RRApplication.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RRApplication.m; sourceTree = "<group>"; };
 		6BB5CE37956E7766FCB22718 /* RRClipboard.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RRClipboard.h; sourceTree = "<group>"; };
 		3FF02D8BDBA096C8296F3512 /* RRClipboard.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RRClipboard.m; sourceTree = "<group>"; };
+		559AA4A8CC4AD273DDFD0EC0 /* RRCredentials.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RRCredentials.h; sourceTree = "<group>"; };
+		5E026029BD4EB628AD804E1F /* RRCredentials.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RRCredentials.m; sourceTree = "<group>"; };
 		1A6D89FB90E857BECE23B6B3 /* RRCursor.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RRCursor.h; sourceTree = "<group>"; };
 		89F331CE11FBF8FDA1BC2333 /* RRCursor.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RRCursor.m; sourceTree = "<group>"; };
 		B4B3AC277606DF9C9BBC7A33 /* RRDesktopController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RRDesktopController.h; sourceTree = "<group>"; };
@@ -109,10 +115,14 @@
 			isa = PBXGroup;
 			children = (
 				62191E95F20DC16A08B06229 /* Info.plist */,
+				D5D1D665253612EE8C12A1CB /* RRApplet.h */,
+				E5397DF04100EEE8BA11FEE8 /* RRApplet.m */,
 				492E23215CA14D093A4F47DB /* RRApplication.h */,
 				9836859AEBF87021F65C6BCB /* RRApplication.m */,
 				6BB5CE37956E7766FCB22718 /* RRClipboard.h */,
 				3FF02D8BDBA096C8296F3512 /* RRClipboard.m */,
+				559AA4A8CC4AD273DDFD0EC0 /* RRCredentials.h */,
+				5E026029BD4EB628AD804E1F /* RRCredentials.m */,
 				1A6D89FB90E857BECE23B6B3 /* RRCursor.h */,
 				89F331CE11FBF8FDA1BC2333 /* RRCursor.m */,
 				B4B3AC277606DF9C9BBC7A33 /* RRDesktopController.h */,
@@ -221,8 +231,10 @@
 				7A36FE0F98517231780157E2 /* rr_input.c in Sources */,
 				CC8FACED55714BA2B7309F21 /* rr_rail.c in Sources */,
 				B9035079C185A22D1F2AA2B3 /* rr_settings.c in Sources */,
+				C5D88BA5E8A07026C0E6454A /* RRApplet.m in Sources */,
 				E793591DABE73CD993FF4E6F /* RRApplication.m in Sources */,
 				B39E12ECE963889B4B8CBF30 /* RRClipboard.m in Sources */,
+				129E4B7786808E2BBC09F1F4 /* RRCredentials.m in Sources */,
 				CD0C6DFFF99912FA3839C916 /* RRCursor.m in Sources */,
 				6EC6312B814F812459ACCAAC /* RRDesktopController.m in Sources */,
 				0693818E6BF2A9216A7F600A /* RRInputSource.m in Sources */,
@@ -379,6 +391,10 @@
 					Carbon,
 					"-framework",
 					IOKit,
+					"-framework",
+					Security,
+					"-framework",
+					ImageIO,
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "com.cratchmere.rdp-retina";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -437,6 +453,10 @@
 					Carbon,
 					"-framework",
 					IOKit,
+					"-framework",
+					Security,
+					"-framework",
+					ImageIO,
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "com.cratchmere.rdp-retina";
 				PRODUCT_NAME = "$(TARGET_NAME)";

@@ -3,6 +3,7 @@
  */
 #import "RRSession.h"
 #import "RRClipboard.h"
+#import "RRCredentials.h"
 #import "RRCursor.h"
 #import "RRDesktopController.h"
 #import "RRKeyboard.h"
@@ -409,6 +410,9 @@ static void rr_mac_channel_disconnected(rrContext *rr, const char *name, void *i
 			                                                [weakSelf printStats];
 		                                                }];
 	}
+
+	/* Ohne /p: das Kennwort aus dem Schlüsselbund nehmen (Applets geben keines mit). */
+	(void)RRCredentialsApply(settings);
 
 	if (freerdp_settings_get_uint32(settings, FreeRDP_KeyboardLayout) == 0)
 	{

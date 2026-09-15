@@ -141,6 +141,8 @@ def target_settings(icon):
             "-lfreerdp-client3", "-lfreerdp3", "-lwinpr3",
             "-framework", "AppKit", "-framework", "Metal", "-framework", "QuartzCore",
             "-framework", "Carbon", "-framework", "IOKit",
+            # Security: Kennwörter im Schlüsselbund, ImageIO: .icns für Applets
+            "-framework", "Security", "-framework", "ImageIO",
         ],
         "PRODUCT_BUNDLE_IDENTIFIER": BUNDLE_ID,
         "PRODUCT_NAME": "$(TARGET_NAME)",
