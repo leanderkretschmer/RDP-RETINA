@@ -235,3 +235,43 @@ Quelle); Mausbedienung, Tastatur, Zwischenablage und Tray sind am Gerät zu prü
   Faktor des primären Bildschirms umgerechnet.
 - Verschieben per Tastatur (Alt+Leertaste → Verschieben) wird sofort beendet.
 - Tray-Symbole: Klick und Kontextmenü, keine Sprechblasen.
+
+## Ton und Mikrofon
+
+Ohne Angabe spielt der Ton aus der Sitzung auf dem Mac – wie bei mstsc „Auf diesem Computer
+wiedergeben“. Der Kern setzt dafür `AudioPlayback`; FreeRDP lädt daraufhin `rdpsnd` als
+statischen und als dynamischen Kanal, schaltet `rdpdr` dazu und nimmt auf macOS sein Backend
+`mac` (AVAudioEngine). Eigene Angaben haben Vorrang:
+
+| Angabe | Ton |
+|---|---|
+| keine | auf dem Mac |
+| `/sound[:…]` | auf dem Mac, mit den angegebenen Optionen (z.B. `/sound:latency:200`) |
+| `/audio-mode:1` | am Server |
+| `/audio-mode:2` | aus |
+| `/microphone` | zusätzlich das Mac-Mikrofon in die Sitzung |
+
+Die Protokollzeile des Kerns nennt das Ergebnis, z.B. `… RemoteApp ja, Ton hier, Mikrofon aus`.
+Den Kanal selbst zeigt `/log-filters:com.freerdp.channels.rdpsnd.client:DEBUG`.
+
+**Format.** Der Client bietet jedes Serverformat an, das FreeRDPs Audiodekoder (FFmpeg) lesen
+oder das Gerät direkt spielen kann. Das macOS-Backend nimmt nur PCM mit 16 Bit Stereo; alles
+andere dekodiert FreeRDP vorher. Gemessen mit dem Prüf-Client gegen den Testserver, Standard
+ohne `/sound`, `Alarm01.wav` per PowerShell-RemoteApp abgespielt: Windows Server 2025
+verhandelt über den dynamischen Kanal (Qualitätsmodus 2) und schickt **AAC** – 241 Blöcke in
+5,6 s, einer je 23 ms mit rund 290 Byte. Ohne AAC-Dekoder bietet der Client nur an, was er
+abspielen kann; unkomprimiertes PCM braucht bis 1,4 Mbit/s.
+
+**Mikrofon** (`/microphone`). FreeRDPs `audin`-Backend für macOS nimmt PCM über AudioQueue
+auf. macOS fragt beim ersten Mal nach der Erlaubnis; die Begründung steht in `mac/Info.plist`.
+Die Antwort kommt asynchron: Öffnet eine Windows-Anwendung das Mikrofon, bevor „Erlauben“
+geklickt ist, bleibt diese eine Aufnahme stumm. Abgelehnt lässt es sich unter
+*Systemeinstellungen → Datenschutz & Sicherheit → Mikrofon* wieder freigeben. Wer die App mit
+Hardened Runtime archiviert, braucht zusätzlich `com.apple.security.device.audio-input`.
+
+**Eigener FreeRDP-Build.** `scripts/build-freerdp-macos.sh` baut das macOS-Audio
+(`WITH_MACAUDIO`) und die FFmpeg-Audiodekoder (`WITH_DSP_FFMPEG`) ausdrücklich mit.
+
+**Nicht geprüft.** Der Mac war während der Umsetzung nicht erreichbar. Offen sind dort: der Ton
+hörbar am Gerät, dass Homebrews FreeRDP das Backend `mac` enthält, und das Mikrofon. Unter Linux
+hat der Prüf-Client nur das Backend `fake`; das Mikrofon lässt sich dort nicht prüfen.

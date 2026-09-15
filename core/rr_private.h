@@ -42,6 +42,7 @@ struct rr_context
 	BOOL sizeGiven;
 	BOOL gfxGiven;
 	BOOL reconnectGiven;
+	BOOL soundGiven;
 
 	rrScreen screens[RR_MAX_SCREENS];
 	UINT32 screenCount;

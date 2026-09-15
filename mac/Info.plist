@@ -26,6 +26,8 @@
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Mit /microphone überträgt rdp-retina das Mikrofon in die Windows-Sitzung.</string>
 	<key>NSPrincipalClass</key>
 	<string>RRApplication</string>
 	<key>NSSupportsAutomaticGraphicsSwitching</key>

@@ -13,6 +13,8 @@
 #include <winpr/crt.h>
 
 #include <freerdp/settings.h>
+#include <freerdp/channels/audin.h>
+#include <freerdp/channels/rdpsnd.h>
 #include <freerdp/client/cmdline.h>
 #include <freerdp/locale/locale.h>
 
@@ -94,6 +96,8 @@ BOOL rr_settings_parse(rrContext* rr, int argc, char** argv, int* exitCode)
 				rr->gfxGiven = TRUE;
 			if (rr_arg_is(arg, "auto-reconnect"))
 				rr->reconnectGiven = TRUE;
+			if (rr_arg_is(arg, "sound") || rr_arg_is(arg, "audio-mode"))
+				rr->soundGiven = TRUE;
 		}
 		args[count++] = argv[i];
 	}
@@ -375,6 +379,14 @@ BOOL rr_configure(rrContext* rr, const rrScreen* screens, UINT32 count, UINT32 d
 	    !freerdp_settings_set_bool(settings, FreeRDP_AutoReconnectionEnabled, TRUE))
 		return FALSE;
 
+	/* Ton wie bei mstsc „auf diesem Computer wiedergeben“, sofern nicht /sound oder
+	 * /audio-mode etwas anderes sagt. FreeRDP lädt rdpsnd daraufhin als statischen und als
+	 * dynamischen Kanal, schaltet rdpdr dazu und wählt auf macOS von selbst das Backend
+	 * "mac" (AudioQueue). */
+	if (!rr->soundGiven && !freerdp_settings_get_bool(settings, FreeRDP_RemoteConsoleAudio) &&
+	    !freerdp_settings_set_bool(settings, FreeRDP_AudioPlayback, TRUE))
+		return FALSE;
+
 	if (remoteApp)
 	{
 		/* Symbole in Retina-Auflösung */
@@ -391,12 +403,22 @@ BOOL rr_configure(rrContext* rr, const rrScreen* screens, UINT32 count, UINT32 d
 			(void)freerdp_settings_set_uint32(settings, FreeRDP_KeyboardLayout, layout);
 	}
 
+	/* /sound und /microphone legen nur den Kanal an; die Schalter setzt FreeRDP erst beim Laden. */
+	const BOOL playback = freerdp_settings_get_bool(settings, FreeRDP_AudioPlayback) ||
+	                      (freerdp_static_channel_collection_find(settings, RDPSND_CHANNEL_NAME) != NULL);
+	const BOOL capture = freerdp_settings_get_bool(settings, FreeRDP_AudioCapture) ||
+	                     (freerdp_dynamic_channel_collection_find(settings, AUDIN_CHANNEL_NAME) != NULL);
+
 	WLog_Print(rr->log, WLOG_INFO,
 	           "Sitzung %" PRIu32 "x%" PRIu32 " Pixel (%s), Skalierung %" PRIu32 " %%/%" PRIu32
-	           " %%, H.264 %s, AVC444 %s, RemoteApp %s",
+	           " %%, H.264 %s, AVC444 %s, RemoteApp %s, Ton %s, Mikrofon %s",
 	           sessionWidth, sessionHeight, origin, desktopScale, deviceScale,
 	           freerdp_settings_get_bool(settings, FreeRDP_GfxH264) ? "an" : "aus",
 	           freerdp_settings_get_bool(settings, FreeRDP_GfxAVC444) ? "an" : "aus",
-	           remoteApp ? "ja" : "nein");
+	           remoteApp ? "ja" : "nein",
+	           playback ? "hier"
+	                    : (freerdp_settings_get_bool(settings, FreeRDP_RemoteConsoleAudio) ? "am Server"
+	                                                                                      : "aus"),
+	           capture ? "an" : "aus");
 	return TRUE;
 }
