@@ -18,15 +18,22 @@ NSString *RRCredentialsAccount(rdpSettings *settings)
 	NSString *hostText = host ? [NSString stringWithUTF8String:host] : nil;
 	NSString *domainText = domain ? [NSString stringWithUTF8String:domain] : nil;
 
-	if ((userText.length == 0) || (hostText.length == 0))
+	if (!hostText)
+		return nil;
+	return RRCredentialsAccountFor(hostText, port, domainText, userText);
+}
+
+NSString *RRCredentialsAccountFor(NSString *host, NSUInteger port, NSString *domain, NSString *user)
+{
+	if ((user.length == 0) || (host.length == 0))
 		return nil;
 
 	NSMutableString *account = [NSMutableString new];
-	if (domainText.length > 0)
-		[account appendFormat:@"%@\\", domainText];
-	[account appendFormat:@"%@@%@", userText, hostText];
+	if (domain.length > 0)
+		[account appendFormat:@"%@\\", domain];
+	[account appendFormat:@"%@@%@", user, host];
 	if ((port != 0) && (port != 3389))
-		[account appendFormat:@":%u", (unsigned)port];
+		[account appendFormat:@":%lu", (unsigned long)port];
 	return account.lowercaseString;
 }
 
@@ -77,6 +84,31 @@ BOOL RRCredentialsStore(NSString *account, NSString *password, NSError **error)
 	return YES;
 }
 
+NSString *RRCredentialsPassword(NSString *account)
+{
+	NSMutableDictionary *query = RRCredentialsQuery(account);
+	query[(__bridge id)kSecReturnData] = @YES;
+	query[(__bridge id)kSecMatchLimit] = (__bridge id)kSecMatchLimitOne;
+
+	CFTypeRef found = NULL;
+	if (SecItemCopyMatching((__bridge CFDictionaryRef)query, &found) != errSecSuccess)
+		return nil;
+
+	NSData *data = (__bridge_transfer NSData *)found;
+	NSString *text = data ? [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] : nil;
+	return (text.length > 0) ? text : nil;
+}
+
+BOOL RRCredentialsDelete(NSString *account, NSError **error)
+{
+	const OSStatus status = SecItemDelete((__bridge CFDictionaryRef)RRCredentialsQuery(account));
+	if ((status == errSecSuccess) || (status == errSecItemNotFound))
+		return YES;
+	if (error)
+		*error = RRCredentialsError(status);
+	return NO;
+}
+
 BOOL RRCredentialsApply(rdpSettings *settings)
 {
 	const char *password = freerdp_settings_get_string(settings, FreeRDP_Password);
@@ -85,20 +117,8 @@ BOOL RRCredentialsApply(rdpSettings *settings)
 		return NO;
 
 	NSString *account = RRCredentialsAccount(settings);
-	if (!account)
-		return NO;
-
-	NSMutableDictionary *query = RRCredentialsQuery(account);
-	query[(__bridge id)kSecReturnData] = @YES;
-	query[(__bridge id)kSecMatchLimit] = (__bridge id)kSecMatchLimitOne;
-
-	CFTypeRef found = NULL;
-	if (SecItemCopyMatching((__bridge CFDictionaryRef)query, &found) != errSecSuccess)
-		return NO;
-
-	NSData *data = (__bridge_transfer NSData *)found;
-	NSString *text = data ? [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] : nil;
-	if (text.length == 0)
+	NSString *text = account ? RRCredentialsPassword(account) : nil;
+	if (!text)
 		return NO;
 
 	return freerdp_settings_set_string(settings, FreeRDP_Password, text.UTF8String) ? YES : NO;

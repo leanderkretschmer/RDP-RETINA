@@ -64,6 +64,7 @@
 @property (nonatomic) BOOL hasMinMax;
 @property (nonatomic) RAIL_MINMAXINFO_ORDER minMax;
 @property (nonatomic) BOOL serverMinimizing;
+@property (nonatomic, copy) NSString *applicationId; /* nil bzw. "" = noch nicht gemeldet */
 @property (nonatomic, strong, nullable) RRRailWindow *window;
 @property (nonatomic, strong, nullable) RRMetalView *view;
 @end
@@ -79,6 +80,18 @@
 @end
 
 @implementation RRRailSurface
+@end
+
+@interface RRRemoteWindow ()
+@property (nonatomic) UINT32 windowId;
+@property (nonatomic) rrRect rect;
+@property (nonatomic, copy) NSString *title;
+@property (nonatomic, copy) NSString *applicationId;
+@property (nonatomic) BOOL minimized;
+@property (nonatomic) BOOL maximized;
+@end
+
+@implementation RRRemoteWindow
 @end
 
 typedef struct
@@ -108,6 +121,8 @@ typedef struct
 	os_unfair_lock _surfaceLock;
 	NSMutableDictionary<NSNumber *, RRRailSurface *> *_surfaces;
 	NSMutableSet<NSNumber *> *_verified;
+	NSMutableDictionary<NSNumber *, NSString *> *_pendingApplicationIds; /* Antwort vor dem Fenster */
+	BOOL _changeScheduled;
 }
 
 - (instancetype)initWithSession:(RRSession *)session
@@ -121,6 +136,8 @@ typedef struct
 		_surfaces = [NSMutableDictionary new];
 		_surfaceLock = OS_UNFAIR_LOCK_INIT;
 		_verified = [NSMutableSet new];
+		_pendingApplicationIds = [NSMutableDictionary new];
+		_updatesApplicationIcon = YES;
 	}
 	return self;
 }
@@ -163,16 +180,22 @@ typedef struct
 - (void)applySnapshot:(RRRailEntry *)snapshot
 {
 	RRRailEntry *entry = _entries[@(snapshot.windowId)];
+	BOOL changed = NO;
 
 	if (!entry)
 	{
 		entry = snapshot;
+		entry.applicationId = _pendingApplicationIds[@(snapshot.windowId)] ?: @"";
+		[_pendingApplicationIds removeObjectForKey:@(snapshot.windowId)];
 		_entries[@(snapshot.windowId)] = entry;
+		changed = YES;
 	}
 	else
 	{
 		const BOOL moving = _move.active && (_move.windowId == entry.windowId);
 
+		changed = (entry.showState != snapshot.showState) || (entry.ownerId != snapshot.ownerId) ||
+		          (entry.style != snapshot.style) || (entry.exStyle != snapshot.exStyle);
 		entry.ownerId = snapshot.ownerId;
 		entry.style = snapshot.style;
 		entry.exStyle = snapshot.exStyle;
@@ -189,6 +212,8 @@ typedef struct
 	}
 
 	[self updateEntry:entry];
+	if (changed)
+		[self scheduleWindowsChanged];
 }
 
 - (BOOL)isShown:(RRRailEntry *)entry
@@ -410,6 +435,7 @@ typedef struct
 		if (self->_move.active && (self->_move.windowId == windowId))
 			self->_move.active = NO;
 		[self closeEntry:entry];
+		[self scheduleWindowsChanged];
 	});
 }
 
@@ -418,6 +444,7 @@ typedef struct
 	for (RRRailEntry *entry in _entries.allValues)
 		[self closeEntry:entry];
 	[_entries removeAllObjects];
+	[_pendingApplicationIds removeAllObjects];
 
 	os_unfair_lock_lock(&_surfaceLock);
 	[_surfaces removeAllObjects];
@@ -615,7 +642,7 @@ typedef struct
 		entry.window.miniwindowImage = image;
 
 	/* Das große Symbol der ersten richtigen Anwendung wird zum Dock-Symbol. */
-	if (big && !_iconSet && ((entry.exStyle & WS_EX_TOOLWINDOW) == 0))
+	if (big && _updatesApplicationIcon && !_iconSet && ((entry.exStyle & WS_EX_TOOLWINDOW) == 0))
 	{
 		NSApp.applicationIconImage = image;
 		_iconSet = YES;
@@ -636,6 +663,112 @@ typedef struct
 		if (NSPointInRect(mouse, window.frame))
 			[cursor set];
 	}
+}
+
+/* ---- Fenster für die Oberfläche (Hauptthread) ------------------------------------------ */
+
+/* Mehrere Änderungen in einem Durchlauf der Hauptschleife zu einer Meldung zusammenfassen */
+- (void)scheduleWindowsChanged
+{
+	if (_changeScheduled)
+		return;
+	_changeScheduled = YES;
+	dispatch_async(dispatch_get_main_queue(), ^{
+		self->_changeScheduled = NO;
+		[self->_session remoteWindowsDidChange];
+	});
+}
+
+- (void)windowProcess:(UINT32)windowId applicationId:(NSString *)applicationId
+{
+	NSString *identifier = [applicationId copy];
+	dispatch_async(dispatch_get_main_queue(), ^{
+		RRRailEntry *entry = self->_entries[@(windowId)];
+		if (!entry)
+		{
+			self->_pendingApplicationIds[@(windowId)] = identifier;
+			return;
+		}
+		if ([entry.applicationId isEqualToString:identifier])
+			return;
+		entry.applicationId = identifier;
+		[self scheduleWindowsChanged];
+	});
+}
+
+- (BOOL)isAppWindow:(RRRailEntry *)entry
+{
+	if ((entry.ownerId != 0) || ((entry.exStyle & WS_EX_TOOLWINDOW) != 0) ||
+	    (entry.showState == WINDOW_HIDE))
+		return NO;
+	return (entry.rect.width > 0) && (entry.rect.height > 0);
+}
+
+- (NSArray<RRRemoteWindow *> *)appWindows
+{
+	NSMutableArray<RRRemoteWindow *> *windows = [NSMutableArray new];
+
+	for (NSNumber *key in [_entries.allKeys sortedArrayUsingSelector:@selector(compare:)])
+	{
+		RRRailEntry *entry = _entries[key];
+		if (![self isAppWindow:entry])
+			continue;
+
+		RRRemoteWindow *window = [RRRemoteWindow new];
+		window.windowId = entry.windowId;
+		window.rect = entry.rect;
+		window.title = entry.title ?: @"";
+		window.applicationId = entry.applicationId ?: @"";
+		window.minimized = (entry.showState == WINDOW_SHOW_MINIMIZED);
+		window.maximized =
+		    (entry.showState == WINDOW_SHOW_MAXIMIZED) || ((entry.style & WS_MAXIMIZE) != 0);
+		[windows addObject:window];
+	}
+	return windows;
+}
+
+- (void)moveWindow:(UINT32)windowId toRect:(rrRect)rect
+{
+	RRRailEntry *entry = _entries[@(windowId)];
+	if (!entry)
+		return;
+
+	entry.rect = rect;
+	[self applyFrame:entry];
+	(void)rr_rail_move(_rr, windowId, &rect);
+}
+
+- (void)showWindow:(UINT32)windowId
+{
+	RRRailEntry *entry = _entries[@(windowId)];
+	if (!entry)
+		return;
+
+	if (entry.showState == WINDOW_SHOW_MINIMIZED)
+		(void)rr_rail_command(_rr, windowId, SC_RESTORE);
+
+	if (@available(macOS 14.0, *))
+		[NSApp activate];
+	else
+		[NSApp activateIgnoringOtherApps:YES];
+
+	RRRailWindow *window = entry.window;
+	if (window.isVisible && !window.isMiniaturized && window.activatable)
+		[window makeKeyAndOrderFront:nil];
+	(void)rr_rail_activate(_rr, windowId, YES);
+}
+
+- (void)setWindow:(UINT32)windowId maximized:(BOOL)maximized minimized:(BOOL)minimized
+{
+	if (!_entries[@(windowId)])
+		return;
+
+	UINT16 command = SC_RESTORE;
+	if (minimized)
+		command = SC_MINIMIZE;
+	else if (maximized)
+		command = SC_MAXIMIZE;
+	(void)rr_rail_command(_rr, windowId, command);
 }
 
 /* ---- Lokales Verschieben und Größeändern ----------------------------------------------- */

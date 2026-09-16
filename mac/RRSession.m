@@ -12,13 +12,82 @@
 #import "RRShare.h"
 #import "RRTray.h"
 
+#include <CommonCrypto/CommonDigest.h>
 #include <os/lock.h>
+#include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
 #include <freerdp/error.h>
 #include <freerdp/settings.h>
 #include <freerdp/channels/cliprdr.h>
 #include <freerdp/client/cliprdr.h>
+
+/* Ein Dialog im Hauptthread, auf den ein FreeRDP-Thread wartet */
+@interface RRWaitState : NSObject
+@property (atomic) BOOL cancelled;
+@end
+
+@implementation RRWaitState
+@end
+
+/* Wartet, bis block im Hauptthread gelaufen ist. Wird die Verbindung währenddessen beendet –
+ * rr_stop wartet im Hauptthread auf genau diesen Thread –, gibt es auf und liefert NO. */
+static BOOL RRSessionWaitForMain(rrContext *rr, void (^block)(void))
+{
+	RRWaitState *state = [RRWaitState new];
+	dispatch_semaphore_t done = dispatch_semaphore_create(0);
+
+	dispatch_async(dispatch_get_main_queue(), ^{
+		if (!state.cancelled)
+			block();
+		dispatch_semaphore_signal(done);
+	});
+
+	while (dispatch_semaphore_wait(done, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(200 * NSEC_PER_MSEC))) != 0)
+	{
+		if (freerdp_shall_disconnect_context(rr_rdp(rr)))
+		{
+			state.cancelled = YES;
+			return NO;
+		}
+	}
+	return !state.cancelled;
+}
+
+static NSString *RRText(const char *text)
+{
+	return text ? ([NSString stringWithUTF8String:text] ?: @"") : @"";
+}
+
+/* Fingerabdruck zur Anzeige; bei VERIFY_CERT_FLAG_FP_IS_PEM SHA-256 über das Zertifikat. */
+static NSString *RRFingerprint(const char *value, DWORD flags)
+{
+	NSString *text = RRText(value);
+	if ((flags & VERIFY_CERT_FLAG_FP_IS_PEM) == 0)
+		return text;
+
+	NSMutableString *base64 = [NSMutableString new];
+	for (NSString *line in [text componentsSeparatedByCharactersInSet:NSCharacterSet.newlineCharacterSet])
+	{
+		if ([line hasPrefix:@"-----END"])
+			break;
+		if ((line.length > 0) && ![line hasPrefix:@"-----"])
+			[base64 appendString:line];
+	}
+
+	NSData *der = [[NSData alloc] initWithBase64EncodedString:base64
+	                                                  options:NSDataBase64DecodingIgnoreUnknownCharacters];
+	if (der.length == 0)
+		return @"";
+
+	unsigned char digest[CC_SHA256_DIGEST_LENGTH];
+	CC_SHA256(der.bytes, (CC_LONG)der.length, digest);
+	NSMutableString *hex = [NSMutableString new];
+	for (int i = 0; i < CC_SHA256_DIGEST_LENGTH; i++)
+		[hex appendFormat:@"%@%02X", (i > 0) ? @":" : @"", digest[i]];
+	return hex;
+}
 
 @implementation RRSession
 {
@@ -36,6 +105,9 @@
 	BOOL _selfTestScheduled;
 	NSString *_sharePath;
 	RRShare *_share;
+	BOOL _managed;
+	/* Im Anmeldedialog eingegeben und zum Speichern angekreuzt; nur im RDP-Thread */
+	NSDictionary<NSString *, NSString *> *_pendingCredentials;
 }
 
 static RRSession *RRSessionFromContext(rrContext *rr)
@@ -255,19 +327,182 @@ static void rr_mac_channel_disconnected(rrContext *rr, const char *name, void *i
 	}
 }
 
+static BOOL rr_mac_connected(rrContext *rr, UINT32 width, UINT32 height)
+{
+	RRSession *session = RRSessionFromContext(rr);
+	if (!rr_mac_desktop_ready(rr, width, height))
+		return NO;
+
+	/* Ein im Dialog eingegebenes Kennwort erst nach erfolgreicher Anmeldung merken. */
+	NSDictionary<NSString *, NSString *> *credentials = session->_pendingCredentials;
+	session->_pendingCredentials = nil;
+	NSString *password = credentials[@"password"];
+	if (password.length > 0)
+	{
+		rdpSettings *settings = rr_settings(rr);
+		NSString *account =
+		    RRCredentialsAccountFor(RRText(freerdp_settings_get_string(settings, FreeRDP_ServerHostname)),
+		                            freerdp_settings_get_uint32(settings, FreeRDP_ServerPort),
+		                            credentials[@"domain"], credentials[@"user"]);
+		if (account)
+			(void)RRCredentialsStore(account, password, NULL);
+	}
+
+	dispatch_async(dispatch_get_main_queue(), ^{
+		session->_connected = YES;
+		id<RRSessionDelegate> delegate = session.delegate;
+		if ([delegate respondsToSelector:@selector(sessionDidConnect:)])
+			[delegate sessionDidConnect:session];
+	});
+	return YES;
+}
+
+static BOOL rr_mac_rail_started(rrContext *rr)
+{
+	RRSession *session = RRSessionFromContext(rr);
+	dispatch_async(dispatch_get_main_queue(), ^{
+		session->_railStarted = YES;
+		id<RRSessionDelegate> delegate = session.delegate;
+		if ([delegate respondsToSelector:@selector(sessionRailDidStart:)])
+			[delegate sessionRailDidStart:session];
+	});
+	return YES;
+}
+
+static BOOL rr_mac_window_process(rrContext *rr, UINT32 windowId, const char *applicationId,
+                                  const char *processName, UINT32 processId)
+{
+	RRSession *session = RRSessionFromContext(rr);
+	/* Pfad der .exe, wenn der Server ihn schickt, sonst die App-ID */
+	const char *identifier = (processName && (*processName != '\0')) ? processName : applicationId;
+	[session->_rail windowProcess:windowId applicationId:RRText(identifier)];
+	return YES;
+}
+
+static BOOL rr_mac_authenticate(rrContext *rr, char **username, char **password, char **domain,
+                                rdp_auth_reason reason)
+{
+	RRSession *session = RRSessionFromContext(rr);
+	if (reason == AUTH_SMARTCARD_PIN)
+		return FALSE;
+
+	NSString *user = RRText(*username);
+	NSString *domainText = RRText(*domain);
+	const BOOL gateway = (reason == GW_AUTH_HTTP) || (reason == GW_AUTH_RDG) || (reason == GW_AUTH_RPC);
+
+	__block NSDictionary<NSString *, NSString *> *answer = nil;
+	const BOOL done = RRSessionWaitForMain(rr, ^{
+		answer = [session askCredentialsWithUser:user domain:domainText gateway:gateway];
+	});
+	if (!done || !answer)
+		return FALSE;
+
+	char *newUser = strdup(answer[@"user"].UTF8String ?: "");
+	char *newDomain = strdup(answer[@"domain"].UTF8String ?: "");
+	char *newPassword = strdup(answer[@"password"].UTF8String ?: "");
+	if (!newUser || !newDomain || !newPassword)
+	{
+		free(newUser);
+		free(newDomain);
+		free(newPassword);
+		return FALSE;
+	}
+
+	free(*username);
+	*username = newUser;
+	free(*domain);
+	*domain = newDomain;
+	free(*password);
+	*password = newPassword;
+
+	if (!gateway && [answer[@"remember"] isEqualToString:@"1"])
+		session->_pendingCredentials = answer;
+	return TRUE;
+}
+
+static DWORD rr_mac_verify_certificate(rrContext *rr, const char *host, UINT16 port,
+                                       const char *commonName, const char *subject,
+                                       const char *issuer, const char *fingerprint,
+                                       const char *oldFingerprint, DWORD flags)
+{
+	RRSession *session = RRSessionFromContext(rr);
+	NSString *hostText = RRText(host);
+	if ((port != 0) && (port != 3389))
+		hostText = [NSString stringWithFormat:@"%@:%u", hostText, (unsigned)port];
+	NSString *name = RRText(commonName);
+	NSString *subjectText = RRText(subject);
+	NSString *issuerText = RRText(issuer);
+	NSString *print = RRFingerprint(fingerprint, flags);
+	const BOOL changed = (oldFingerprint != NULL) || ((flags & VERIFY_CERT_FLAG_CHANGED) != 0);
+	const BOOL mismatch = (flags & VERIFY_CERT_FLAG_MISMATCH) != 0;
+
+	__block DWORD answer = 0;
+	const BOOL done = RRSessionWaitForMain(rr, ^{
+		answer = [session askCertificateForHost:hostText
+		                             commonName:name
+		                                subject:subjectText
+		                                 issuer:issuerText
+		                            fingerprint:print
+		                                changed:changed
+		                               mismatch:mismatch];
+	});
+	return done ? answer : 0;
+}
+
 /* ---- Lebenszyklus ---------------------------------------------------------------------- */
 
 - (instancetype)initWithArgc:(int)argc argv:(char **)argv exitCode:(int *)exitCode
+{
+	return [self initWithArgc:argc argv:argv delegate:nil exitCode:exitCode];
+}
+
+- (instancetype)initWithArguments:(NSArray<NSString *> *)arguments
+                         delegate:(id<RRSessionDelegate>)delegate
+                         exitCode:(int *)exitCode
+{
+	const int argc = (int)arguments.count;
+	char **argv = calloc((size_t)argc + 1, sizeof(char *));
+	if (!argv)
+	{
+		*exitCode = 1;
+		return nil;
+	}
+	for (int i = 0; i < argc; i++)
+		argv[i] = strdup(arguments[(NSUInteger)i].UTF8String ?: "");
+
+	self = [self initWithArgc:argc argv:argv delegate:delegate exitCode:exitCode];
+
+	for (int i = 0; i < argc; i++)
+		free(argv[i]);
+	free(argv);
+	return self;
+}
+
+- (instancetype)initWithArgc:(int)argc
+                        argv:(char **)argv
+                    delegate:(id<RRSessionDelegate>)delegate
+                    exitCode:(int *)exitCode
 {
 	self = [super init];
 	if (!self)
 		return nil;
 
+	_delegate = delegate;
+	_managed = (delegate != nil);
 	_textureLock = OS_UNFAIR_LOCK_INIT;
 	_cursor = NSCursor.arrowCursor;
+	_serverName = @"";
 
 	rrFrontend frontend = { 0 };
-	frontend.Connected = rr_mac_desktop_ready;
+	frontend.Connected = rr_mac_connected;
+	frontend.RailStarted = rr_mac_rail_started;
+	frontend.WindowProcess = rr_mac_window_process;
+	/* Ohne Terminal (Oberfläche, Dock, Finder) fragen Dialoge nach Kennwort und Zertifikat. */
+	if (_managed || !isatty(STDIN_FILENO))
+	{
+		frontend.Authenticate = rr_mac_authenticate;
+		frontend.VerifyCertificate = rr_mac_verify_certificate;
+	}
 	frontend.Disconnected = rr_mac_disconnected;
 	frontend.DesktopResized = rr_mac_desktop_ready;
 	frontend.DesktopUpdated = rr_mac_desktop_updated;
@@ -332,11 +567,24 @@ static void rr_mac_channel_disconnected(rrContext *rr, const char *name, void *i
 	}
 
 	_keyboard = [[RRKeyboard alloc] initWithContext:_rr];
+
+	_serverName = RRText(freerdp_settings_get_string(settings, FreeRDP_ServerHostname));
+
+	/* Fokus der App: gedrückte Tasten loslassen bzw. Feststelltaste abgleichen */
+	[NSNotificationCenter.defaultCenter addObserver:self
+	                                       selector:@selector(applicationActivityChanged:)
+	                                           name:NSApplicationDidBecomeActiveNotification
+	                                         object:nil];
+	[NSNotificationCenter.defaultCenter addObserver:self
+	                                       selector:@selector(applicationActivityChanged:)
+	                                           name:NSApplicationDidResignActiveNotification
+	                                         object:nil];
 	return self;
 }
 
 - (void)dealloc
 {
+	[NSNotificationCenter.defaultCenter removeObserver:self];
 	[_share invalidate];
 	if (_rr)
 		rr_free(_rr);
@@ -446,6 +694,7 @@ static void rr_mac_channel_disconnected(rrContext *rr, const char *name, void *i
 	if (remoteApp)
 	{
 		_rail = [[RRRailController alloc] initWithSession:self];
+		_rail.updatesApplicationIcon = !_managed;
 		_tray = [[RRTray alloc] initWithSession:self];
 
 		if (_sharePath)
@@ -494,16 +743,17 @@ static void rr_mac_channel_disconnected(rrContext *rr, const char *name, void *i
 	        (unsigned long long)_renderer.presentedFrames, codecs.UTF8String);
 }
 
+/* Aus jedem Thread: der Kern nimmt Programme unter seiner Sperre entgegen, die App holt sich
+ * danach im Hauptthread nach vorn. */
 - (BOOL)launchApp:(NSString *)app
 {
 	if (_stopping || !rr_rail_launch(_rr, app.UTF8String))
 		return NO;
 
 	fprintf(stderr, "rdp-retina: weiteres Programm %s\n", app.UTF8String);
-	if (@available(macOS 14.0, *))
-		[NSApp activate];
-	else
-		[NSApp activateIgnoringOtherApps:YES];
+	dispatch_async(dispatch_get_main_queue(), ^{
+		[self activateApp];
+	});
 	return YES;
 }
 
@@ -521,10 +771,13 @@ static void rr_mac_channel_disconnected(rrContext *rr, const char *name, void *i
 
 - (void)handleDisconnect:(UINT32)error
 {
-	if (_stopping)
+	id<RRSessionDelegate> delegate = _delegate;
+
+	/* Die Oberfläche erfährt auch ein gewolltes Ende; die Kommandozeile beendet sich selbst. */
+	if (_stopping && !delegate)
 		return;
 
-	if ((error != 0) && (error != FREERDP_ERROR_CONNECT_CANCELLED))
+	if (!delegate && (error != 0) && (error != FREERDP_ERROR_CONNECT_CANCELLED))
 	{
 		fprintf(stderr, "rdp-retina: Verbindung beendet: %s\n",
 		        freerdp_get_last_error_string(error));
@@ -546,10 +799,154 @@ static void rr_mac_channel_disconnected(rrContext *rr, const char *name, void *i
 
 	[_share invalidate];
 	_share = nil;
+	[_statsTimer invalidate];
+	_statsTimer = nil;
 	[_rail closeAll];
 	[_tray removeAll];
 	[_desktop close];
+	_connected = NO;
+	_railStarted = NO;
+
+	if (delegate)
+	{
+		[delegate session:self didEndWithError:_stopping ? 0 : error];
+		return;
+	}
 	[NSApp terminate:nil];
+}
+
+/* ---- Oberfläche ------------------------------------------------------------------------ */
+
+- (NSArray<RRRemoteWindow *> *)appWindows
+{
+	return _rail ? [_rail appWindows] : @[];
+}
+
+- (void)moveRemoteWindow:(UINT32)windowId toRect:(rrRect)rect
+{
+	[_rail moveWindow:windowId toRect:rect];
+}
+
+- (void)showRemoteWindow:(UINT32)windowId
+{
+	[_rail showWindow:windowId];
+}
+
+- (void)setRemoteWindow:(UINT32)windowId maximized:(BOOL)maximized minimized:(BOOL)minimized
+{
+	[_rail setWindow:windowId maximized:maximized minimized:minimized];
+}
+
+- (void)remoteWindowsDidChange
+{
+	id<RRSessionDelegate> delegate = _delegate;
+	if ([delegate respondsToSelector:@selector(sessionWindowsDidChange:)])
+		[delegate sessionWindowsDidChange:self];
+}
+
+- (void)applicationActivityChanged:(NSNotification *)notification
+{
+	if ([notification.name isEqualToString:NSApplicationDidBecomeActiveNotification])
+		[self appDidBecomeActive];
+	else
+		[self appDidResignActive];
+}
+
+- (void)activateApp
+{
+	if (@available(macOS 14.0, *))
+		[NSApp activate];
+	else
+		[NSApp activateIgnoringOtherApps:YES];
+}
+
+- (NSDictionary<NSString *, NSString *> *)askCredentialsWithUser:(NSString *)user
+                                                          domain:(NSString *)domain
+                                                         gateway:(BOOL)gateway
+{
+	NSAlert *alert = [[NSAlert alloc] init];
+	alert.messageText = gateway ? [NSString stringWithFormat:@"Anmeldung am Gateway für %@", _serverName]
+	                            : [NSString stringWithFormat:@"Anmeldung an %@", _serverName];
+	alert.informativeText = @"Benutzer und Kennwort für die Windows-Sitzung.";
+	[alert addButtonWithTitle:@"Anmelden"];
+	[alert addButtonWithTitle:@"Abbrechen"];
+
+	const CGFloat width = 280;
+	NSTextField *userField = [NSTextField textFieldWithString:user];
+	userField.placeholderString = @"Benutzer";
+	NSTextField *domainField = [NSTextField textFieldWithString:domain];
+	domainField.placeholderString = @"Domäne (optional)";
+	NSSecureTextField *passwordField = [[NSSecureTextField alloc] initWithFrame:NSMakeRect(0, 0, width, 22)];
+	passwordField.placeholderString = @"Kennwort";
+	NSButton *remember = [NSButton checkboxWithTitle:@"Im Schlüsselbund speichern" target:nil action:nil];
+	remember.state = gateway ? NSControlStateValueOff : NSControlStateValueOn;
+	remember.enabled = !gateway;
+
+	NSStackView *stack = [NSStackView stackViewWithViews:@[ userField, domainField, passwordField, remember ]];
+	stack.orientation = NSUserInterfaceLayoutOrientationVertical;
+	stack.alignment = NSLayoutAttributeLeading;
+	stack.spacing = 8;
+	for (NSView *field in @[ userField, domainField, passwordField ])
+		[field.widthAnchor constraintEqualToConstant:width].active = YES;
+	stack.frame = NSMakeRect(0, 0, width, 112);
+	alert.accessoryView = stack;
+	[alert layout];
+	alert.window.initialFirstResponder = (user.length > 0) ? passwordField : userField;
+
+	[self activateApp];
+	if ([alert runModal] != NSAlertFirstButtonReturn)
+		return nil;
+
+	return @{
+		@"user" : userField.stringValue,
+		@"domain" : domainField.stringValue,
+		@"password" : passwordField.stringValue,
+		@"remember" : (remember.state == NSControlStateValueOn) ? @"1" : @"",
+	};
+}
+
+- (DWORD)askCertificateForHost:(NSString *)host
+                    commonName:(NSString *)commonName
+                       subject:(NSString *)subject
+                        issuer:(NSString *)issuer
+                   fingerprint:(NSString *)fingerprint
+                       changed:(BOOL)changed
+                      mismatch:(BOOL)mismatch
+{
+	NSAlert *alert = [[NSAlert alloc] init];
+	alert.alertStyle = changed ? NSAlertStyleCritical : NSAlertStyleWarning;
+	alert.messageText = changed ? [NSString stringWithFormat:@"Das Zertifikat von %@ hat sich geändert", host]
+	                            : [NSString stringWithFormat:@"Zertifikat von %@ prüfen", host];
+
+	NSMutableString *info = [NSMutableString new];
+	if (changed)
+		[info appendString:@"Das kann eine Neuinstallation des Servers sein – oder jemand gibt sich als "
+		                   @"der Server aus. Verbinde nur, wenn du den neuen Fingerabdruck bestätigen "
+		                   @"kannst.\n\n"];
+	else
+		[info appendString:@"Dieser Server ist noch unbekannt. Vergleiche den Fingerabdruck mit dem "
+		                   @"Zertifikat auf dem Server, bevor du ihm vertraust.\n\n"];
+	if (mismatch)
+		[info appendString:@"Achtung: Das Zertifikat ist nicht auf diesen Namen ausgestellt.\n\n"];
+	[info appendFormat:@"Ausgestellt für: %@\nInhaber: %@\nAussteller: %@\nFingerabdruck: %@", commonName,
+	                   subject, issuer, fingerprint];
+	alert.informativeText = info;
+
+	/* Abbrechen zuerst: Eingabetaste vertraut nicht aus Versehen. */
+	[alert addButtonWithTitle:@"Abbrechen"];
+	[alert addButtonWithTitle:@"Vertrauen"];
+	[alert addButtonWithTitle:@"Nur diesmal"];
+
+	[self activateApp];
+	switch ([alert runModal])
+	{
+		case NSAlertSecondButtonReturn:
+			return 1;
+		case NSAlertThirdButtonReturn:
+			return 2;
+		default:
+			return 0;
+	}
 }
 
 /* ---- Desktoptextur --------------------------------------------------------------------- */

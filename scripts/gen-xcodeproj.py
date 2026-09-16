@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
 """
-Erzeugt rdp-retina.xcodeproj aus den Quellen in core/ und mac/.
+Erzeugt rdp-retina.xcodeproj aus den Quellen in core/, mac/ und companion/.
 
 Das Projekt liegt fertig im Repo, damit Xcode und Xcode Cloud es direkt öffnen. Nach dem
 Hinzufügen oder Entfernen von Quelldateien einfach erneut ausführen:
 
     python3 scripts/gen-xcodeproj.py
+
+Zwei Ziele:
+    rdp-retina        die App (core/, mac/)
+    RDP-Retina Link   Vorlage für Verknüpfungen auf RemoteApps (companion/). Eingebettet unter
+                      rdp-retina.app/Contents/Helpers; rdp-retina kopiert sie für jede
+                      Verknüpfung (mac/RRLinkInstaller.m).
 
 FreeRDP 3 und OpenSSL werden statisch in die App gebaut (Mac App Store: nichts wird von außerhalb
 des Bundles geladen). Das erledigt der erste Build-Schritt mit scripts/build-freerdp-static.sh
@@ -23,6 +29,8 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 NAME = "rdp-retina"
 BUNDLE_ID = "com.cratchmere.rdp-retina"
 DEPLOYMENT_TARGET = "13.0"
+MARKETING_VERSION = "0.1.0"
+CURRENT_PROJECT_VERSION = "1"
 GROUPS = ["core", "mac"]
 FILE_TYPES = {
     ".c": "sourcecode.c.c",
@@ -37,6 +45,13 @@ ENTITLEMENTS = "mac/rdp-retina.entitlements"
 # App-Icon aus Icon Composer (Xcode 26) als <Name>.icon im Wurzelverzeichnis. actool macht
 # daraus Assets.car und für ältere macOS-Versionen eine .icns.
 ICON_TYPE = "folder.iconcomposer.icon"
+
+# Vorlage für Verknüpfungen. Ziel im Bundle muss zu RRLinkTemplatePath in RRLinkInstaller.m passen.
+LINK_NAME = "RDP-Retina Link"
+LINK_BUNDLE_ID = "com.cratchmere.rdp-retina.link"
+LINK_GROUP = "companion"
+LINK_ENTITLEMENTS = "companion/RDP-Retina-Link.entitlements"
+LINK_DESTINATION = "Contents/Helpers"
 
 # Erster Build-Schritt: FreeRDP und OpenSSL statisch bauen. Beim ersten Mal 10 bis 20 Minuten,
 # danach vergleicht das Skript nur einen Stempel. Seine note:/error:-Zeilen zeigt Xcode an.
@@ -72,6 +87,15 @@ def setting(key, value, indent):
 
 def settings_block(values, indent):
     return "".join(setting(k, values[k], indent) for k in sorted(values))
+
+
+def source_files(groups):
+    files = []
+    for group in groups:
+        for path in sorted((ROOT / group).iterdir()):
+            if path.is_file() and path.suffix in FILE_TYPES:
+                files.append((group, path.name, path.suffix))
+    return files
 
 
 def project_settings(debug):
@@ -135,19 +159,21 @@ def target_settings(icon, debug):
     values = {
         # FreeRDP liegt als Universal-Bibliothek vor (arm64 + x86_64).
         "ARCHS": "$(ARCHS_STANDARD)",
-        # App Sandbox mit ausgehenden Verbindungen und Mikrofon (mac/rdp-retina.entitlements). Die
-        # ENABLE_*-Schalter spiegeln die Datei für Xcodes Ansicht „Signing & Capabilities“.
+        # App Sandbox mit ausgehenden Verbindungen, Mikrofon und vom Benutzer gewählten Orten
+        # (Verknüpfungen; mac/rdp-retina.entitlements). Die ENABLE_*-Schalter spiegeln die Datei
+        # für Xcodes Ansicht „Signing & Capabilities“.
         "CODE_SIGN_ENTITLEMENTS": ENTITLEMENTS,
         "ENABLE_APP_SANDBOX": "YES",
         "ENABLE_OUTGOING_NETWORK_CONNECTIONS": "YES",
         "ENABLE_RESOURCE_ACCESS_AUDIO_INPUT": "YES",
+        "ENABLE_USER_SELECTED_FILES": "readwrite",
         "ENABLE_HARDENED_RUNTIME": "YES",
         # Debug läuft ohne Team (ad hoc), das Archiv für App Store Connect braucht eines.
         "CODE_SIGN_IDENTITY": "-" if debug else "Apple Development",
         "CODE_SIGN_STYLE": "Automatic",
         "DEVELOPMENT_TEAM": os.environ.get("RR_DEVELOPMENT_TEAM", ""),
         "COMBINE_HIDPI_IMAGES": "YES",
-        "CURRENT_PROJECT_VERSION": "1",
+        "CURRENT_PROJECT_VERSION": CURRENT_PROJECT_VERSION,
         # Der FreeRDP-Schritt lädt Quellen und schreibt nach vendor/ und build/.
         "ENABLE_USER_SCRIPT_SANDBOXING": "NO",
         "GCC_PREFIX_HEADER": "mac/RRPrefix.h",
@@ -158,7 +184,7 @@ def target_settings(icon, debug):
         "SYSTEM_HEADER_SEARCH_PATHS": [f"{FREERDP}/include/freerdp3", f"{FREERDP}/include/winpr3"],
         "INFOPLIST_FILE": "mac/Info.plist",
         "LD_RUNPATH_SEARCH_PATHS": ["$(inherited)", "@executable_path/../Frameworks"],
-        "MARKETING_VERSION": "0.1.0",
+        "MARKETING_VERSION": MARKETING_VERSION,
         "OTHER_LDFLAGS": [
             # FreeRDP mit Kanälen und OpenSSL, dazu was FreeRDP vom System braucht
             f"{FREERDP}/lib/librr-freerdp.a", "-lz",
@@ -167,8 +193,10 @@ def target_settings(icon, debug):
             "-framework", "ApplicationServices",
             "-framework", "AppKit", "-framework", "Metal", "-framework", "QuartzCore",
             "-framework", "Carbon", "-framework", "IOKit",
-            # Security: Kennwörter im Schlüsselbund, ImageIO: .icns für Applets
+            # Security: Kennwörter im Schlüsselbund, ImageIO: .icns für Applets,
+            # UniformTypeIdentifiers: Sicherungsdialog für Verknüpfungen
             "-framework", "Security", "-framework", "ImageIO",
+            "-framework", "UniformTypeIdentifiers",
         ],
         "PRODUCT_BUNDLE_IDENTIFIER": BUNDLE_ID,
         "PRODUCT_NAME": "$(TARGET_NAME)",
@@ -178,17 +206,43 @@ def target_settings(icon, debug):
     return values
 
 
+def link_settings(icon, debug):
+    values = {
+        "ARCHS": "$(ARCHS_STANDARD)",
+        # Jedes Programm im Bundle einer App-Store-App muss in der Sandbox laufen; die Vorlage
+        # braucht darüber hinaus nichts (erweitertes Attribut am eigenen Bundle, URL öffnen).
+        "CODE_SIGN_ENTITLEMENTS": LINK_ENTITLEMENTS,
+        "ENABLE_APP_SANDBOX": "YES",
+        "ENABLE_HARDENED_RUNTIME": "YES",
+        "CODE_SIGN_IDENTITY": "-" if debug else "Apple Development",
+        "CODE_SIGN_STYLE": "Automatic",
+        "DEVELOPMENT_TEAM": os.environ.get("RR_DEVELOPMENT_TEAM", ""),
+        "COMBINE_HIDPI_IMAGES": "YES",
+        "CURRENT_PROJECT_VERSION": CURRENT_PROJECT_VERSION,
+        "GENERATE_INFOPLIST_FILE": "NO",
+        "INFOPLIST_FILE": "companion/Info.plist",
+        "LD_RUNPATH_SEARCH_PATHS": ["$(inherited)", "@executable_path/../Frameworks"],
+        "MARKETING_VERSION": MARKETING_VERSION,
+        "OTHER_LDFLAGS": ["-framework", "AppKit"],
+        "PRODUCT_BUNDLE_IDENTIFIER": LINK_BUNDLE_ID,
+        "PRODUCT_NAME": LINK_NAME,
+        # Nur eingebettet in rdp-retina.app, nicht als eigenes Produkt im Archiv
+        "SKIP_INSTALL": "YES",
+    }
+    if icon:
+        values["ASSETCATALOG_COMPILER_APPICON_NAME"] = icon.stem
+    return values
+
+
 def main():
-    files = []
-    for group in GROUPS:
-        for path in sorted((ROOT / group).iterdir()):
-            if path.is_file() and path.suffix in FILE_TYPES:
-                files.append((group, path.name, path.suffix))
+    files = source_files(GROUPS)
+    link_files = source_files([LINK_GROUP])
     icons = sorted(p for p in ROOT.glob("*.icon") if p.is_dir())
     icon = icons[0] if icons else None
     if icon:
         icon_file = oid("file", "root", icon.name)
         icon_build = oid("build", "root", icon.name)
+        link_icon_build = oid("build", "link", icon.name)
 
     project = oid("project")
     target = oid("target")
@@ -202,24 +256,56 @@ def main():
     project_list = oid("configlist", "project")
     target_list = oid("configlist", "target")
     configs = {(scope, cfg): oid("config", scope, cfg)
-               for scope in ("project", "target") for cfg in ("Debug", "Release")}
+               for scope in ("project", "target", "link") for cfg in ("Debug", "Release")}
+
+    link_target = oid("target", "link")
+    link_product = oid("product", "link")
+    link_sources_phase = oid("phase", "link", "sources")
+    link_frameworks_phase = oid("phase", "link", "frameworks")
+    link_resources_phase = oid("phase", "link", "resources")
+    link_list = oid("configlist", "link")
+    link_proxy = oid("proxy", "link")
+    link_dependency = oid("dependency", "link")
+    embed_phase = oid("phase", "link-embed")
+    embed_build = oid("build", "link-embed")
+    link_app = f"{LINK_NAME}.app"
 
     out = []
     w = out.append
     w("// !$*UTF8*$!\n{\n\tarchiveVersion = 1;\n\tclasses = {\n\t};\n\tobjectVersion = 56;\n\tobjects = {\n\n")
 
     w("/* Begin PBXBuildFile section */\n")
-    for group, name, ext in files:
+    for group, name, ext in files + link_files:
         if ext in COMPILED:
             w(f"\t\t{oid('build', group, name)} /* {name} in Sources */ = "
               f"{{isa = PBXBuildFile; fileRef = {oid('file', group, name)} /* {name} */; }};\n")
     if icon:
         w(f"\t\t{icon_build} /* {icon.name} in Resources */ = "
           f"{{isa = PBXBuildFile; fileRef = {icon_file} /* {icon.name} */; }};\n")
+        w(f"\t\t{link_icon_build} /* {icon.name} in Resources */ = "
+          f"{{isa = PBXBuildFile; fileRef = {icon_file} /* {icon.name} */; }};\n")
+    w(f"\t\t{embed_build} /* {link_app} in Verknüpfungsvorlage */ = {{isa = PBXBuildFile; "
+      f"fileRef = {link_product} /* {link_app} */; "
+      "settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };\n")
     w("/* End PBXBuildFile section */\n\n")
 
+    w("/* Begin PBXContainerItemProxy section */\n")
+    w(f"\t\t{link_proxy} /* PBXContainerItemProxy */ = {{\n\t\t\tisa = PBXContainerItemProxy;\n"
+      f"\t\t\tcontainerPortal = {project} /* Project object */;\n\t\t\tproxyType = 1;\n"
+      f"\t\t\tremoteGlobalIDString = {link_target};\n\t\t\tremoteInfo = {q(LINK_NAME)};\n\t\t}};\n")
+    w("/* End PBXContainerItemProxy section */\n\n")
+
+    w("/* Begin PBXCopyFilesBuildPhase section */\n")
+    w(f"\t\t{embed_phase} /* Verknüpfungsvorlage */ = {{\n\t\t\tisa = PBXCopyFilesBuildPhase;\n"
+      "\t\t\tbuildActionMask = 2147483647;\n"
+      f"\t\t\tdstPath = {q(LINK_DESTINATION)};\n\t\t\tdstSubfolderSpec = 1;\n"
+      f"\t\t\tfiles = (\n\t\t\t\t{embed_build} /* {link_app} in Verknüpfungsvorlage */,\n\t\t\t);\n"
+      f"\t\t\tname = {q('Verknüpfungsvorlage')};\n"
+      "\t\t\trunOnlyForDeploymentPostprocessing = 0;\n\t\t};\n")
+    w("/* End PBXCopyFilesBuildPhase section */\n\n")
+
     w("/* Begin PBXFileReference section */\n")
-    for group, name, ext in files:
+    for group, name, ext in files + link_files:
         w(f"\t\t{oid('file', group, name)} /* {name} */ = {{isa = PBXFileReference; "
           f"lastKnownFileType = {FILE_TYPES[ext]}; path = {q(name)}; sourceTree = \"<group>\"; }};\n")
     if icon:
@@ -227,26 +313,31 @@ def main():
           f"lastKnownFileType = {ICON_TYPE}; path = {q(icon.name)}; sourceTree = \"<group>\"; }};\n")
     w(f"\t\t{product} /* {NAME}.app */ = {{isa = PBXFileReference; explicitFileType = wrapper.application; "
       f"includeInIndex = 0; path = {q(NAME + '.app')}; sourceTree = BUILT_PRODUCTS_DIR; }};\n")
+    w(f"\t\t{link_product} /* {link_app} */ = {{isa = PBXFileReference; explicitFileType = wrapper.application; "
+      f"includeInIndex = 0; path = {q(link_app)}; sourceTree = BUILT_PRODUCTS_DIR; }};\n")
     w("/* End PBXFileReference section */\n\n")
 
     w("/* Begin PBXFrameworksBuildPhase section */\n")
-    w(f"\t\t{frameworks_phase} /* Frameworks */ = {{\n\t\t\tisa = PBXFrameworksBuildPhase;\n"
-      "\t\t\tbuildActionMask = 2147483647;\n\t\t\tfiles = (\n\t\t\t);\n"
-      "\t\t\trunOnlyForDeploymentPostprocessing = 0;\n\t\t};\n")
+    for phase in (frameworks_phase, link_frameworks_phase):
+        w(f"\t\t{phase} /* Frameworks */ = {{\n\t\t\tisa = PBXFrameworksBuildPhase;\n"
+          "\t\t\tbuildActionMask = 2147483647;\n\t\t\tfiles = (\n\t\t\t);\n"
+          "\t\t\trunOnlyForDeploymentPostprocessing = 0;\n\t\t};\n")
     w("/* End PBXFrameworksBuildPhase section */\n\n")
 
     w("/* Begin PBXGroup section */\n")
-    children = "".join(f"\t\t\t\t{oid('group', g)} /* {g} */,\n" for g in GROUPS)
+    children = "".join(f"\t\t\t\t{oid('group', g)} /* {g} */,\n" for g in GROUPS + [LINK_GROUP])
     if icon:
         children = f"\t\t\t\t{icon_file} /* {icon.name} */,\n" + children
     w(f"\t\t{main_group} = {{\n\t\t\tisa = PBXGroup;\n\t\t\tchildren = (\n{children}"
       f"\t\t\t\t{products_group} /* Products */,\n\t\t\t);\n\t\t\tsourceTree = \"<group>\";\n\t\t}};\n")
-    for group in GROUPS:
-        entries = "".join(f"\t\t\t\t{oid('file', g, n)} /* {n} */,\n" for g, n, _ in files if g == group)
+    for group in GROUPS + [LINK_GROUP]:
+        entries = "".join(f"\t\t\t\t{oid('file', g, n)} /* {n} */,\n"
+                          for g, n, _ in files + link_files if g == group)
         w(f"\t\t{oid('group', group)} /* {group} */ = {{\n\t\t\tisa = PBXGroup;\n\t\t\tchildren = (\n{entries}"
           f"\t\t\t);\n\t\t\tpath = {group};\n\t\t\tsourceTree = \"<group>\";\n\t\t}};\n")
     w(f"\t\t{products_group} /* Products */ = {{\n\t\t\tisa = PBXGroup;\n\t\t\tchildren = (\n"
-      f"\t\t\t\t{product} /* {NAME}.app */,\n\t\t\t);\n\t\t\tname = Products;\n\t\t\tsourceTree = \"<group>\";\n\t\t}};\n")
+      f"\t\t\t\t{product} /* {NAME}.app */,\n\t\t\t\t{link_product} /* {link_app} */,\n"
+      "\t\t\t);\n\t\t\tname = Products;\n\t\t\tsourceTree = \"<group>\";\n\t\t};\n")
     w("/* End PBXGroup section */\n\n")
 
     w("/* Begin PBXNativeTarget section */\n")
@@ -254,9 +345,19 @@ def main():
       f"\t\t\tbuildConfigurationList = {target_list} /* Build configuration list for PBXNativeTarget \"{NAME}\" */;\n"
       f"\t\t\tbuildPhases = (\n\t\t\t\t{build_phase} /* FreeRDP bauen */,\n"
       f"\t\t\t\t{sources_phase} /* Sources */,\n\t\t\t\t{frameworks_phase} /* Frameworks */,\n"
-      f"\t\t\t\t{resources_phase} /* Resources */,\n\t\t\t);\n\t\t\tbuildRules = (\n\t\t\t);\n"
-      f"\t\t\tdependencies = (\n\t\t\t);\n\t\t\tname = {q(NAME)};\n\t\t\tproductName = {q(NAME)};\n"
+      f"\t\t\t\t{resources_phase} /* Resources */,\n"
+      f"\t\t\t\t{embed_phase} /* Verknüpfungsvorlage */,\n\t\t\t);\n\t\t\tbuildRules = (\n\t\t\t);\n"
+      f"\t\t\tdependencies = (\n\t\t\t\t{link_dependency} /* PBXTargetDependency */,\n\t\t\t);\n"
+      f"\t\t\tname = {q(NAME)};\n\t\t\tproductName = {q(NAME)};\n"
       f"\t\t\tproductReference = {product} /* {NAME}.app */;\n"
+      "\t\t\tproductType = \"com.apple.product-type.application\";\n\t\t};\n")
+    w(f"\t\t{link_target} /* {LINK_NAME} */ = {{\n\t\t\tisa = PBXNativeTarget;\n"
+      f"\t\t\tbuildConfigurationList = {link_list} /* Build configuration list for PBXNativeTarget \"{LINK_NAME}\" */;\n"
+      f"\t\t\tbuildPhases = (\n\t\t\t\t{link_sources_phase} /* Sources */,\n"
+      f"\t\t\t\t{link_frameworks_phase} /* Frameworks */,\n"
+      f"\t\t\t\t{link_resources_phase} /* Resources */,\n\t\t\t);\n\t\t\tbuildRules = (\n\t\t\t);\n"
+      f"\t\t\tdependencies = (\n\t\t\t);\n\t\t\tname = {q(LINK_NAME)};\n\t\t\tproductName = {q(LINK_NAME)};\n"
+      f"\t\t\tproductReference = {link_product} /* {link_app} */;\n"
       "\t\t\tproductType = \"com.apple.product-type.application\";\n\t\t};\n")
     w("/* End PBXNativeTarget section */\n\n")
 
@@ -264,20 +365,24 @@ def main():
     w(f"\t\t{project} /* Project object */ = {{\n\t\t\tisa = PBXProject;\n\t\t\tattributes = {{\n"
       "\t\t\t\tBuildIndependentTargetsInParallel = 1;\n\t\t\t\tLastUpgradeCheck = 2650;\n"
       f"\t\t\t\tTargetAttributes = {{\n\t\t\t\t\t{target} = {{\n\t\t\t\t\t\tCreatedOnToolsVersion = 26.5;\n"
+      f"\t\t\t\t\t}};\n\t\t\t\t\t{link_target} = {{\n\t\t\t\t\t\tCreatedOnToolsVersion = 26.5;\n"
       "\t\t\t\t\t};\n\t\t\t\t};\n\t\t\t};\n"
       f"\t\t\tbuildConfigurationList = {project_list} /* Build configuration list for PBXProject \"{NAME}\" */;\n"
       "\t\t\tcompatibilityVersion = \"Xcode 14.0\";\n\t\t\tdevelopmentRegion = de;\n"
       "\t\t\thasScannedForEncodings = 0;\n\t\t\tknownRegions = (\n\t\t\t\tde,\n\t\t\t\tBase,\n\t\t\t);\n"
       f"\t\t\tmainGroup = {main_group};\n\t\t\tproductRefGroup = {products_group} /* Products */;\n"
       "\t\t\tprojectDirPath = \"\";\n\t\t\tprojectRoot = \"\";\n"
-      f"\t\t\ttargets = (\n\t\t\t\t{target} /* {NAME} */,\n\t\t\t);\n\t\t}};\n")
+      f"\t\t\ttargets = (\n\t\t\t\t{target} /* {NAME} */,\n\t\t\t\t{link_target} /* {LINK_NAME} */,\n"
+      "\t\t\t);\n\t\t};\n")
     w("/* End PBXProject section */\n\n")
 
     w("/* Begin PBXResourcesBuildPhase section */\n")
-    resources = f"\t\t\t\t{icon_build} /* {icon.name} in Resources */,\n" if icon else ""
-    w(f"\t\t{resources_phase} /* Resources */ = {{\n\t\t\tisa = PBXResourcesBuildPhase;\n"
-      f"\t\t\tbuildActionMask = 2147483647;\n\t\t\tfiles = (\n{resources}\t\t\t);\n"
-      "\t\t\trunOnlyForDeploymentPostprocessing = 0;\n\t\t};\n")
+    for phase, build in ((resources_phase, icon_build if icon else None),
+                         (link_resources_phase, link_icon_build if icon else None)):
+        resources = f"\t\t\t\t{build} /* {icon.name} in Resources */,\n" if build else ""
+        w(f"\t\t{phase} /* Resources */ = {{\n\t\t\tisa = PBXResourcesBuildPhase;\n"
+          f"\t\t\tbuildActionMask = 2147483647;\n\t\t\tfiles = (\n{resources}\t\t\t);\n"
+          "\t\t\trunOnlyForDeploymentPostprocessing = 0;\n\t\t};\n")
     w("/* End PBXResourcesBuildPhase section */\n\n")
 
     w("/* Begin PBXShellScriptBuildPhase section */\n")
@@ -291,12 +396,19 @@ def main():
     w("/* End PBXShellScriptBuildPhase section */\n\n")
 
     w("/* Begin PBXSourcesBuildPhase section */\n")
-    sources = "".join(f"\t\t\t\t{oid('build', g, n)} /* {n} in Sources */,\n"
-                      for g, n, ext in files if ext in COMPILED)
-    w(f"\t\t{sources_phase} /* Sources */ = {{\n\t\t\tisa = PBXSourcesBuildPhase;\n"
-      f"\t\t\tbuildActionMask = 2147483647;\n\t\t\tfiles = (\n{sources}\t\t\t);\n"
-      "\t\t\trunOnlyForDeploymentPostprocessing = 0;\n\t\t};\n")
+    for phase, group_files in ((sources_phase, files), (link_sources_phase, link_files)):
+        sources = "".join(f"\t\t\t\t{oid('build', g, n)} /* {n} in Sources */,\n"
+                          for g, n, ext in group_files if ext in COMPILED)
+        w(f"\t\t{phase} /* Sources */ = {{\n\t\t\tisa = PBXSourcesBuildPhase;\n"
+          f"\t\t\tbuildActionMask = 2147483647;\n\t\t\tfiles = (\n{sources}\t\t\t);\n"
+          "\t\t\trunOnlyForDeploymentPostprocessing = 0;\n\t\t};\n")
     w("/* End PBXSourcesBuildPhase section */\n\n")
+
+    w("/* Begin PBXTargetDependency section */\n")
+    w(f"\t\t{link_dependency} /* PBXTargetDependency */ = {{\n\t\t\tisa = PBXTargetDependency;\n"
+      f"\t\t\ttarget = {link_target} /* {LINK_NAME} */;\n"
+      f"\t\t\ttargetProxy = {link_proxy} /* PBXContainerItemProxy */;\n\t\t}};\n")
+    w("/* End PBXTargetDependency section */\n\n")
 
     w("/* Begin XCBuildConfiguration section */\n")
     for cfg in ("Debug", "Release"):
@@ -307,11 +419,16 @@ def main():
         w(f"\t\t{configs[('target', cfg)]} /* {cfg} */ = {{\n\t\t\tisa = XCBuildConfiguration;\n"
           f"\t\t\tbuildSettings = {{\n{settings_block(target_settings(icon, cfg == 'Debug'), 4)}\t\t\t}};\n"
           f"\t\t\tname = {cfg};\n\t\t}};\n")
+    for cfg in ("Debug", "Release"):
+        w(f"\t\t{configs[('link', cfg)]} /* {cfg} */ = {{\n\t\t\tisa = XCBuildConfiguration;\n"
+          f"\t\t\tbuildSettings = {{\n{settings_block(link_settings(icon, cfg == 'Debug'), 4)}\t\t\t}};\n"
+          f"\t\t\tname = {cfg};\n\t\t}};\n")
     w("/* End XCBuildConfiguration section */\n\n")
 
     w("/* Begin XCConfigurationList section */\n")
     for scope, list_id, label in (("project", project_list, f"PBXProject \"{NAME}\""),
-                                  ("target", target_list, f"PBXNativeTarget \"{NAME}\"")):
+                                  ("target", target_list, f"PBXNativeTarget \"{NAME}\""),
+                                  ("link", link_list, f"PBXNativeTarget \"{LINK_NAME}\"")):
         w(f"\t\t{list_id} /* Build configuration list for {label} */ = {{\n\t\t\tisa = XCConfigurationList;\n"
           f"\t\t\tbuildConfigurations = (\n\t\t\t\t{configs[(scope, 'Debug')]} /* Debug */,\n"
           f"\t\t\t\t{configs[(scope, 'Release')]} /* Release */,\n\t\t\t);\n"
@@ -407,7 +524,7 @@ def main():
 </Scheme>
 '''
     (proj_dir / "xcshareddata" / "xcschemes" / f"{NAME}.xcscheme").write_text(scheme, encoding="utf-8")
-    print(f"{proj_dir.relative_to(ROOT)}: {len(files)} Dateien")
+    print(f"{proj_dir.relative_to(ROOT)}: {len(files)} Dateien, Vorlage {len(link_files)} Dateien")
 
 
 if __name__ == "__main__":

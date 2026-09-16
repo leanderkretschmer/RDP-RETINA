@@ -16,20 +16,56 @@
 		C5D88BA5E8A07026C0E6454A /* RRApplet.m in Sources */ = {isa = PBXBuildFile; fileRef = E5397DF04100EEE8BA11FEE8 /* RRApplet.m */; };
 		E793591DABE73CD993FF4E6F /* RRApplication.m in Sources */ = {isa = PBXBuildFile; fileRef = 9836859AEBF87021F65C6BCB /* RRApplication.m */; };
 		B39E12ECE963889B4B8CBF30 /* RRClipboard.m in Sources */ = {isa = PBXBuildFile; fileRef = 3FF02D8BDBA096C8296F3512 /* RRClipboard.m */; };
+		B0D7F34BCBD56666A16FCC4B /* RRConfig.m in Sources */ = {isa = PBXBuildFile; fileRef = E86951C99F804F5CE203DC3D /* RRConfig.m */; };
+		B6AA6CE8F2BB7D9E7030D24E /* RRConnectionManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 8CAE5D95F3903998759926C4 /* RRConnectionManager.m */; };
 		129E4B7786808E2BBC09F1F4 /* RRCredentials.m in Sources */ = {isa = PBXBuildFile; fileRef = 5E026029BD4EB628AD804E1F /* RRCredentials.m */; };
 		CD0C6DFFF99912FA3839C916 /* RRCursor.m in Sources */ = {isa = PBXBuildFile; fileRef = 89F331CE11FBF8FDA1BC2333 /* RRCursor.m */; };
 		6EC6312B814F812459ACCAAC /* RRDesktopController.m in Sources */ = {isa = PBXBuildFile; fileRef = 5A69F5B6A738AAF4C0A8AB4F /* RRDesktopController.m */; };
 		0693818E6BF2A9216A7F600A /* RRInputSource.m in Sources */ = {isa = PBXBuildFile; fileRef = 4CDBB73A9D7BBF9321490854 /* RRInputSource.m */; };
 		27B18F818583EF8A905B867D /* RRKeyboard.m in Sources */ = {isa = PBXBuildFile; fileRef = 2C921974BD8449B49A6DD2A9 /* RRKeyboard.m */; };
+		7346CADB03DC848763924916 /* RRLinkInstaller.m in Sources */ = {isa = PBXBuildFile; fileRef = AA0BC0B2C6C8B427773C56F4 /* RRLinkInstaller.m */; };
 		AA8DD7112CA5E66DF034E6BE /* RRMetalView.m in Sources */ = {isa = PBXBuildFile; fileRef = 4113F385FB602689263B1A72 /* RRMetalView.m */; };
 		2004EFE082FC16E1F1BCFBCD /* RRRailController.m in Sources */ = {isa = PBXBuildFile; fileRef = EE5E78689E58B088F60AF308 /* RRRailController.m */; };
 		E42B90811266DB0614899599 /* RRRenderer.m in Sources */ = {isa = PBXBuildFile; fileRef = ACC94847D4E2B23F93CE8EBF /* RRRenderer.m */; };
 		A5DA60F7660737DFCBEF8FCD /* RRSession.m in Sources */ = {isa = PBXBuildFile; fileRef = DAB3C73E6C9FB2B52EACD8C4 /* RRSession.m */; };
+		0C7F824910FD5E1676593C27 /* RRSettingsAppsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = E32C72ECA16A601FC5C3899F /* RRSettingsAppsViewController.m */; };
+		22429F802CC59FD75B70B1AA /* RRSettingsForm.m in Sources */ = {isa = PBXBuildFile; fileRef = 24BE4510C988DE7A230803CA /* RRSettingsForm.m */; };
+		F0239A0F66BF8B19A19AFD70 /* RRSettingsServersViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = C0E33DB59E2619BEA46A9379 /* RRSettingsServersViewController.m */; };
+		6DACA4F01F0F94D0438B056E /* RRSettingsTransferViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 39EE33EAA959839890C91528 /* RRSettingsTransferViewController.m */; };
+		D46EE084885E96B3AA7CE827 /* RRSettingsWindowController.m in Sources */ = {isa = PBXBuildFile; fileRef = 7B5A822C948D09D0B041568B /* RRSettingsWindowController.m */; };
+		19334C7AB331F0EBC5E68B46 /* RRSettingsWorkspaceViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 77BAFE1FDCBA38F88C9639F8 /* RRSettingsWorkspaceViewController.m */; };
 		A513625145A8B9E113FDFBA4 /* RRShare.m in Sources */ = {isa = PBXBuildFile; fileRef = 848412DD5B600EBB7BACB2A2 /* RRShare.m */; };
 		BF04E654BAACDD6D653A7472 /* RRTray.m in Sources */ = {isa = PBXBuildFile; fileRef = B60FD94DD60343A0EB0C284E /* RRTray.m */; };
 		F55E7AFD8989209CEC8AC49A /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 46051C27F61C6A9848E80800 /* main.m */; };
+		6603A498E4020A96A595B000 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = F6284AB04D9AA389B8F7D133 /* main.m */; };
 		8C8CE326555DFE4769A8D7F4 /* RDP-Retina.icon in Resources */ = {isa = PBXBuildFile; fileRef = 67CBCBB72908B3C023A467E2 /* RDP-Retina.icon */; };
+		6FFE7D7CB91F7EB3AE47328A /* RDP-Retina.icon in Resources */ = {isa = PBXBuildFile; fileRef = 67CBCBB72908B3C023A467E2 /* RDP-Retina.icon */; };
+		AE28AE9F14F9A37C4B8F94E3 /* RDP-Retina Link.app in Verknüpfungsvorlage */ = {isa = PBXBuildFile; fileRef = 30FD1F98E5687A086186C06D /* RDP-Retina Link.app */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		2B0C686661D578FCF76D2DC1 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B09222CDABD80A31196B84F0 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 08A3CD735A905DBD7B6DE652;
+			remoteInfo = "RDP-Retina Link";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		80238FE8CA93D80697256B8D /* Verknüpfungsvorlage */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = Contents/Helpers;
+			dstSubfolderSpec = 1;
+			files = (
+				AE28AE9F14F9A37C4B8F94E3 /* RDP-Retina Link.app in Verknüpfungsvorlage */,
+			);
+			name = Verknüpfungsvorlage;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		6F127843347B7EABB56EB2FF /* rr_context.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = rr_context.c; sourceTree = "<group>"; };
@@ -47,6 +83,10 @@
 		9836859AEBF87021F65C6BCB /* RRApplication.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RRApplication.m; sourceTree = "<group>"; };
 		6BB5CE37956E7766FCB22718 /* RRClipboard.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RRClipboard.h; sourceTree = "<group>"; };
 		3FF02D8BDBA096C8296F3512 /* RRClipboard.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RRClipboard.m; sourceTree = "<group>"; };
+		651E478D3FF0F5ECC98637E8 /* RRConfig.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RRConfig.h; sourceTree = "<group>"; };
+		E86951C99F804F5CE203DC3D /* RRConfig.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RRConfig.m; sourceTree = "<group>"; };
+		6840CFF74379B7CBB1D7E56F /* RRConnectionManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RRConnectionManager.h; sourceTree = "<group>"; };
+		8CAE5D95F3903998759926C4 /* RRConnectionManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RRConnectionManager.m; sourceTree = "<group>"; };
 		559AA4A8CC4AD273DDFD0EC0 /* RRCredentials.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RRCredentials.h; sourceTree = "<group>"; };
 		5E026029BD4EB628AD804E1F /* RRCredentials.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RRCredentials.m; sourceTree = "<group>"; };
 		1A6D89FB90E857BECE23B6B3 /* RRCursor.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RRCursor.h; sourceTree = "<group>"; };
@@ -57,6 +97,8 @@
 		4CDBB73A9D7BBF9321490854 /* RRInputSource.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RRInputSource.m; sourceTree = "<group>"; };
 		ADB4012B2944D1238E583D1D /* RRKeyboard.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RRKeyboard.h; sourceTree = "<group>"; };
 		2C921974BD8449B49A6DD2A9 /* RRKeyboard.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RRKeyboard.m; sourceTree = "<group>"; };
+		35ADEB35F2DF1CEF6FD60AD8 /* RRLinkInstaller.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RRLinkInstaller.h; sourceTree = "<group>"; };
+		AA0BC0B2C6C8B427773C56F4 /* RRLinkInstaller.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RRLinkInstaller.m; sourceTree = "<group>"; };
 		E668B97F648294C673E4235E /* RRMetalView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RRMetalView.h; sourceTree = "<group>"; };
 		4113F385FB602689263B1A72 /* RRMetalView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RRMetalView.m; sourceTree = "<group>"; };
 		213CD83A1FF88DE33491E0B5 /* RRPrefix.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RRPrefix.h; sourceTree = "<group>"; };
@@ -66,18 +108,41 @@
 		ACC94847D4E2B23F93CE8EBF /* RRRenderer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RRRenderer.m; sourceTree = "<group>"; };
 		2AA227717C1397F143E236D5 /* RRSession.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RRSession.h; sourceTree = "<group>"; };
 		DAB3C73E6C9FB2B52EACD8C4 /* RRSession.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RRSession.m; sourceTree = "<group>"; };
+		F87C676F2DBD0F9B051124BD /* RRSettingsAppsViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RRSettingsAppsViewController.h; sourceTree = "<group>"; };
+		E32C72ECA16A601FC5C3899F /* RRSettingsAppsViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RRSettingsAppsViewController.m; sourceTree = "<group>"; };
+		E1905DFB2C179718807B1AB7 /* RRSettingsForm.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RRSettingsForm.h; sourceTree = "<group>"; };
+		24BE4510C988DE7A230803CA /* RRSettingsForm.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RRSettingsForm.m; sourceTree = "<group>"; };
+		4ADFB9FC6C61535EA2235287 /* RRSettingsServersViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RRSettingsServersViewController.h; sourceTree = "<group>"; };
+		C0E33DB59E2619BEA46A9379 /* RRSettingsServersViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RRSettingsServersViewController.m; sourceTree = "<group>"; };
+		82F8AB0ED90310D89B818BB3 /* RRSettingsTransferViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RRSettingsTransferViewController.h; sourceTree = "<group>"; };
+		39EE33EAA959839890C91528 /* RRSettingsTransferViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RRSettingsTransferViewController.m; sourceTree = "<group>"; };
+		AD12BADC6779EC180D12AC87 /* RRSettingsWindowController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RRSettingsWindowController.h; sourceTree = "<group>"; };
+		7B5A822C948D09D0B041568B /* RRSettingsWindowController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RRSettingsWindowController.m; sourceTree = "<group>"; };
+		526FDA0100C17F6A60047D90 /* RRSettingsWorkspaceViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RRSettingsWorkspaceViewController.h; sourceTree = "<group>"; };
+		77BAFE1FDCBA38F88C9639F8 /* RRSettingsWorkspaceViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RRSettingsWorkspaceViewController.m; sourceTree = "<group>"; };
 		8AF04EB7C659EBCDA418F3FA /* RRShare.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RRShare.h; sourceTree = "<group>"; };
 		848412DD5B600EBB7BACB2A2 /* RRShare.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RRShare.m; sourceTree = "<group>"; };
 		0818F96AFBE44CAB4B225524 /* RRTray.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RRTray.h; sourceTree = "<group>"; };
 		B60FD94DD60343A0EB0C284E /* RRTray.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RRTray.m; sourceTree = "<group>"; };
 		46051C27F61C6A9848E80800 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
 		9825AA2B90B20DF04E5A79E0 /* rdp-retina.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "rdp-retina.entitlements"; sourceTree = "<group>"; };
+		3F411D2C9B367898FCEDE402 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		0A018302E0782EC336908092 /* RDP-Retina-Link.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "RDP-Retina-Link.entitlements"; sourceTree = "<group>"; };
+		F6284AB04D9AA389B8F7D133 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
 		67CBCBB72908B3C023A467E2 /* RDP-Retina.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = "RDP-Retina.icon"; sourceTree = "<group>"; };
 		50178A953A82BB4E518CA119 /* rdp-retina.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "rdp-retina.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		30FD1F98E5687A086186C06D /* RDP-Retina Link.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "RDP-Retina Link.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		050BD13606CE9C23BB9C2CB2 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FA54F3009D5B7C338402D08D /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -93,6 +158,7 @@
 				67CBCBB72908B3C023A467E2 /* RDP-Retina.icon */,
 				5C9E96A89C184C623D2EE358 /* core */,
 				FC16C3A9DA8FC7AA74048E6E /* mac */,
+				3EC41B3E9B3F3E010721F94F /* companion */,
 				B6D6D43CC34EF2AF227B536E /* Products */,
 			);
 			sourceTree = "<group>";
@@ -122,6 +188,10 @@
 				9836859AEBF87021F65C6BCB /* RRApplication.m */,
 				6BB5CE37956E7766FCB22718 /* RRClipboard.h */,
 				3FF02D8BDBA096C8296F3512 /* RRClipboard.m */,
+				651E478D3FF0F5ECC98637E8 /* RRConfig.h */,
+				E86951C99F804F5CE203DC3D /* RRConfig.m */,
+				6840CFF74379B7CBB1D7E56F /* RRConnectionManager.h */,
+				8CAE5D95F3903998759926C4 /* RRConnectionManager.m */,
 				559AA4A8CC4AD273DDFD0EC0 /* RRCredentials.h */,
 				5E026029BD4EB628AD804E1F /* RRCredentials.m */,
 				1A6D89FB90E857BECE23B6B3 /* RRCursor.h */,
@@ -132,6 +202,8 @@
 				4CDBB73A9D7BBF9321490854 /* RRInputSource.m */,
 				ADB4012B2944D1238E583D1D /* RRKeyboard.h */,
 				2C921974BD8449B49A6DD2A9 /* RRKeyboard.m */,
+				35ADEB35F2DF1CEF6FD60AD8 /* RRLinkInstaller.h */,
+				AA0BC0B2C6C8B427773C56F4 /* RRLinkInstaller.m */,
 				E668B97F648294C673E4235E /* RRMetalView.h */,
 				4113F385FB602689263B1A72 /* RRMetalView.m */,
 				213CD83A1FF88DE33491E0B5 /* RRPrefix.h */,
@@ -141,6 +213,18 @@
 				ACC94847D4E2B23F93CE8EBF /* RRRenderer.m */,
 				2AA227717C1397F143E236D5 /* RRSession.h */,
 				DAB3C73E6C9FB2B52EACD8C4 /* RRSession.m */,
+				F87C676F2DBD0F9B051124BD /* RRSettingsAppsViewController.h */,
+				E32C72ECA16A601FC5C3899F /* RRSettingsAppsViewController.m */,
+				E1905DFB2C179718807B1AB7 /* RRSettingsForm.h */,
+				24BE4510C988DE7A230803CA /* RRSettingsForm.m */,
+				4ADFB9FC6C61535EA2235287 /* RRSettingsServersViewController.h */,
+				C0E33DB59E2619BEA46A9379 /* RRSettingsServersViewController.m */,
+				82F8AB0ED90310D89B818BB3 /* RRSettingsTransferViewController.h */,
+				39EE33EAA959839890C91528 /* RRSettingsTransferViewController.m */,
+				AD12BADC6779EC180D12AC87 /* RRSettingsWindowController.h */,
+				7B5A822C948D09D0B041568B /* RRSettingsWindowController.m */,
+				526FDA0100C17F6A60047D90 /* RRSettingsWorkspaceViewController.h */,
+				77BAFE1FDCBA38F88C9639F8 /* RRSettingsWorkspaceViewController.m */,
 				8AF04EB7C659EBCDA418F3FA /* RRShare.h */,
 				848412DD5B600EBB7BACB2A2 /* RRShare.m */,
 				0818F96AFBE44CAB4B225524 /* RRTray.h */,
@@ -151,10 +235,21 @@
 			path = mac;
 			sourceTree = "<group>";
 		};
+		3EC41B3E9B3F3E010721F94F /* companion */ = {
+			isa = PBXGroup;
+			children = (
+				3F411D2C9B367898FCEDE402 /* Info.plist */,
+				0A018302E0782EC336908092 /* RDP-Retina-Link.entitlements */,
+				F6284AB04D9AA389B8F7D133 /* main.m */,
+			);
+			path = companion;
+			sourceTree = "<group>";
+		};
 		B6D6D43CC34EF2AF227B536E /* Products */ = {
 			isa = PBXGroup;
 			children = (
 				50178A953A82BB4E518CA119 /* rdp-retina.app */,
+				30FD1F98E5687A086186C06D /* RDP-Retina Link.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -170,14 +265,33 @@
 				7715E746A3732ADC44AEEA9A /* Sources */,
 				050BD13606CE9C23BB9C2CB2 /* Frameworks */,
 				97626131F303CBCAC809E4CE /* Resources */,
+				80238FE8CA93D80697256B8D /* Verknüpfungsvorlage */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B2D33B34C941519CA167ABD2 /* PBXTargetDependency */,
+			);
+			name = "rdp-retina";
+			productName = "rdp-retina";
+			productReference = 50178A953A82BB4E518CA119 /* rdp-retina.app */;
+			productType = "com.apple.product-type.application";
+		};
+		08A3CD735A905DBD7B6DE652 /* RDP-Retina Link */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 903697052C1F9DF694795439 /* Build configuration list for PBXNativeTarget "RDP-Retina Link" */;
+			buildPhases = (
+				A2C6884198BF4758AE99BCE2 /* Sources */,
+				FA54F3009D5B7C338402D08D /* Frameworks */,
+				81CF1370DFA0FE070D434EF3 /* Resources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
-			name = "rdp-retina";
-			productName = "rdp-retina";
-			productReference = 50178A953A82BB4E518CA119 /* rdp-retina.app */;
+			name = "RDP-Retina Link";
+			productName = "RDP-Retina Link";
+			productReference = 30FD1F98E5687A086186C06D /* RDP-Retina Link.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -190,6 +304,9 @@
 				LastUpgradeCheck = 2650;
 				TargetAttributes = {
 					14F588AEA56767926571F87F = {
+						CreatedOnToolsVersion = 26.5;
+					};
+					08A3CD735A905DBD7B6DE652 = {
 						CreatedOnToolsVersion = 26.5;
 					};
 				};
@@ -208,6 +325,7 @@
 			projectRoot = "";
 			targets = (
 				14F588AEA56767926571F87F /* rdp-retina */,
+				08A3CD735A905DBD7B6DE652 /* RDP-Retina Link */,
 			);
 		};
 /* End PBXProject section */
@@ -218,6 +336,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				8C8CE326555DFE4769A8D7F4 /* RDP-Retina.icon in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		81CF1370DFA0FE070D434EF3 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6FFE7D7CB91F7EB3AE47328A /* RDP-Retina.icon in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -260,22 +386,47 @@
 				C5D88BA5E8A07026C0E6454A /* RRApplet.m in Sources */,
 				E793591DABE73CD993FF4E6F /* RRApplication.m in Sources */,
 				B39E12ECE963889B4B8CBF30 /* RRClipboard.m in Sources */,
+				B0D7F34BCBD56666A16FCC4B /* RRConfig.m in Sources */,
+				B6AA6CE8F2BB7D9E7030D24E /* RRConnectionManager.m in Sources */,
 				129E4B7786808E2BBC09F1F4 /* RRCredentials.m in Sources */,
 				CD0C6DFFF99912FA3839C916 /* RRCursor.m in Sources */,
 				6EC6312B814F812459ACCAAC /* RRDesktopController.m in Sources */,
 				0693818E6BF2A9216A7F600A /* RRInputSource.m in Sources */,
 				27B18F818583EF8A905B867D /* RRKeyboard.m in Sources */,
+				7346CADB03DC848763924916 /* RRLinkInstaller.m in Sources */,
 				AA8DD7112CA5E66DF034E6BE /* RRMetalView.m in Sources */,
 				2004EFE082FC16E1F1BCFBCD /* RRRailController.m in Sources */,
 				E42B90811266DB0614899599 /* RRRenderer.m in Sources */,
 				A5DA60F7660737DFCBEF8FCD /* RRSession.m in Sources */,
+				0C7F824910FD5E1676593C27 /* RRSettingsAppsViewController.m in Sources */,
+				22429F802CC59FD75B70B1AA /* RRSettingsForm.m in Sources */,
+				F0239A0F66BF8B19A19AFD70 /* RRSettingsServersViewController.m in Sources */,
+				6DACA4F01F0F94D0438B056E /* RRSettingsTransferViewController.m in Sources */,
+				D46EE084885E96B3AA7CE827 /* RRSettingsWindowController.m in Sources */,
+				19334C7AB331F0EBC5E68B46 /* RRSettingsWorkspaceViewController.m in Sources */,
 				A513625145A8B9E113FDFBA4 /* RRShare.m in Sources */,
 				BF04E654BAACDD6D653A7472 /* RRTray.m in Sources */,
 				F55E7AFD8989209CEC8AC49A /* main.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A2C6884198BF4758AE99BCE2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6603A498E4020A96A595B000 /* main.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		B2D33B34C941519CA167ABD2 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 08A3CD735A905DBD7B6DE652 /* RDP-Retina Link */;
+			targetProxy = 2B0C686661D578FCF76D2DC1 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		4FD452CBEEB047940118DA05 /* Debug */ = {
@@ -389,6 +540,7 @@
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				ENABLE_USER_SELECTED_FILES = readwrite;
 				GCC_PREFIX_HEADER = mac/RRPrefix.h;
 				GENERATE_INFOPLIST_FILE = NO;
 				HEADER_SEARCH_PATHS = (
@@ -429,6 +581,8 @@
 					Security,
 					"-framework",
 					ImageIO,
+					"-framework",
+					UniformTypeIdentifiers,
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "com.cratchmere.rdp-retina";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -455,6 +609,7 @@
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				ENABLE_USER_SELECTED_FILES = readwrite;
 				GCC_PREFIX_HEADER = mac/RRPrefix.h;
 				GENERATE_INFOPLIST_FILE = NO;
 				HEADER_SEARCH_PATHS = (
@@ -495,6 +650,8 @@
 					Security,
 					"-framework",
 					ImageIO,
+					"-framework",
+					UniformTypeIdentifiers,
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "com.cratchmere.rdp-retina";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -502,6 +659,66 @@
 					"$(SRCROOT)/vendor/freerdp-static/include/freerdp3",
 					"$(SRCROOT)/vendor/freerdp-static/include/winpr3",
 				);
+			};
+			name = Release;
+		};
+		F68241EB416CE40D0FD1E9F7 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD)";
+				ASSETCATALOG_COMPILER_APPICON_NAME = "RDP-Retina";
+				CODE_SIGN_ENTITLEMENTS = "companion/RDP-Retina-Link.entitlements";
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = companion/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					AppKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.cratchmere.rdp-retina.link";
+				PRODUCT_NAME = "RDP-Retina Link";
+				SKIP_INSTALL = YES;
+			};
+			name = Debug;
+		};
+		66DAD5FCA1017460C1CCFA70 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD)";
+				ASSETCATALOG_COMPILER_APPICON_NAME = "RDP-Retina";
+				CODE_SIGN_ENTITLEMENTS = "companion/RDP-Retina-Link.entitlements";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = companion/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					AppKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.cratchmere.rdp-retina.link";
+				PRODUCT_NAME = "RDP-Retina Link";
+				SKIP_INSTALL = YES;
 			};
 			name = Release;
 		};
@@ -522,6 +739,15 @@
 			buildConfigurations = (
 				62B016D1EA3B6D6189BEAF13 /* Debug */,
 				04CB42321259FD3210DDED26 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		903697052C1F9DF694795439 /* Build configuration list for PBXNativeTarget "RDP-Retina Link" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F68241EB416CE40D0FD1E9F7 /* Debug */,
+				66DAD5FCA1017460C1CCFA70 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

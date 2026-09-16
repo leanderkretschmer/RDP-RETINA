@@ -1,9 +1,10 @@
 /*
  * rdp-retina – RDP-Client für macOS mit nativer Retina-Schärfe und RemoteApp
  *
- * Bedienung nur über die Kommandozeile, Argumente wie bei xfreerdp (P1):
+ * Mit Argumenten wie xfreerdp (P1) verbindet die App direkt:
  *   rdp-retina /v:server /u:benutzer /f /scale:180 /gfx:AVC444 /network:lan
  *   rdp-retina /v:server /u:benutzer /app:program:"||taskmgr"
+ * Ohne Argumente – aus Finder, Launchpad oder über eine Verknüpfung – öffnet sie die Oberfläche.
  */
 #import <AppKit/AppKit.h>
 
@@ -11,8 +12,12 @@
 #import "RRApplication.h"
 #import "RRSession.h"
 
-/* Xcode hängt beim Start eigene Argumente an (-NSDocumentRevisionsDebugMode YES, ...),
- * die FreeRDPs Auswertung ablehnen würde. */
+/* NSApp.delegate hält nur schwach; die Delegates leben so lange wie der Prozess. */
+static RRAppDelegate *RRCommandLineDelegate = nil;
+static RRUIAppDelegate *RRInterfaceDelegate = nil;
+
+/* Xcode hängt beim Start eigene Argumente an (-NSDocumentRevisionsDebugMode YES, ...), ältere
+ * macOS-Versionen beim Start aus dem Finder -psn_…; FreeRDPs Auswertung lehnte beide ab. */
 static int RRFilterArguments(int argc, char **argv, char **out)
 {
 	int count = 0;
@@ -20,6 +25,8 @@ static int RRFilterArguments(int argc, char **argv, char **out)
 	for (int i = 0; i < argc; i++)
 	{
 		const char *arg = argv[i];
+		if ((i > 0) && (strncmp(arg, "-psn_", 5) == 0))
+			continue;
 		if ((i > 0) && ((strncmp(arg, "-NS", 3) == 0) || (strncmp(arg, "-Apple", 6) == 0)))
 		{
 			if ((i + 1 < argc) && (argv[i + 1][0] != '/') && (argv[i + 1][0] != '-') &&
@@ -59,6 +66,16 @@ int main(int argc, char *argv[])
 
 		[RRApplication sharedApplication];
 
+		if (count <= 1)
+		{
+			free(args);
+			RRInterfaceDelegate = [[RRUIAppDelegate alloc] init];
+			NSApp.delegate = RRInterfaceDelegate;
+			[NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
+			[NSApp run];
+			return 0;
+		}
+
 		int exitCode = 0;
 		RRSession *session = [[RRSession alloc] initWithArgc:count argv:args exitCode:&exitCode];
 		if (!session)
@@ -67,8 +84,8 @@ int main(int argc, char *argv[])
 			return exitCode;
 		}
 
-		RRAppDelegate *delegate = [[RRAppDelegate alloc] initWithSession:session];
-		NSApp.delegate = delegate;
+		RRCommandLineDelegate = [[RRAppDelegate alloc] initWithSession:session];
+		NSApp.delegate = RRCommandLineDelegate;
 		[NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
 		[NSApp run];
 

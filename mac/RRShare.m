@@ -254,11 +254,9 @@ static NSArray<NSString *> *RRShareReadLines(int fd)
 		NSMutableString *reply = [NSMutableString new];
 		for (NSString *app in RRShareReadLines(client))
 		{
-			__block BOOL ok = NO;
-			dispatch_sync(dispatch_get_main_queue(), ^{
-				ok = handler(app);
-			});
-			[reply appendString:ok ? @"OK\n" : @"FEHLER\n"];
+			/* Ohne Umweg über den Hauptthread: der Kern nimmt Programme aus jedem Thread an,
+			 * und ein offener Dialog dürfte die Übergabe sonst aufhalten. */
+			[reply appendString:handler(app) ? @"OK\n" : @"FEHLER\n"];
 		}
 		(void)RRShareWrite(client, reply);
 		close(client);

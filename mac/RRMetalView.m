@@ -365,7 +365,13 @@ static NSUInteger RRButtonForOtherEvent(NSEvent *event)
 
 - (BOOL)performKeyEquivalent:(NSEvent *)event
 {
-	/* Cmd-Kombinationen gehören der Sitzung, nicht einem Menü. */
+	/* Cmd-Kombinationen gehören der Sitzung, nicht dem Menü: selbst weitergeben und als erledigt
+	 * melden, sonst fände die Menüleiste der Oberfläche z.B. Cmd+Q oder Cmd+M. */
+	if ((event.type == NSEventTypeKeyDown) && self.window.isKeyWindow && (self.window.firstResponder == self))
+	{
+		[self.input metalView:self keyEvent:event];
+		return YES;
+	}
 	return NO;
 }
 

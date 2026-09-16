@@ -25,7 +25,8 @@ typedef NS_ENUM(NSInteger, RRShareResult) {
 
 + (RRShareResult)handOffApps:(NSArray<NSString *> *)apps toPath:(NSString *)path;
 
-/* Lauscht bis -invalidate. handler läuft im Hauptthread, einmal je Programm. */
+/* Lauscht bis -invalidate. handler läuft einmal je Programm auf einer Nebenqueue – er darf den
+ * Hauptthread nicht abwarten, der kann in einem Dialog stecken. */
 - (nullable instancetype)initWithPath:(NSString *)path handler:(BOOL (^)(NSString *app))handler;
 - (void)invalidate;
 
