@@ -52,6 +52,8 @@ struct rr_rail_window
 	BOOL surfaceChanged;
 };
 
+static void rr_rail_request_process(rrContext* rr, UINT32 windowId);
+
 typedef struct
 {
 	rrWindow view;
@@ -281,6 +283,12 @@ static BOOL rr_window_common(rdpContext* context, const WINDOW_ORDER_INFO* info,
 	BOOL rc = TRUE;
 	if (rr->fe.WindowChanged)
 		rc = rr->fe.WindowChanged(rr, &copy.view, f, created);
+
+	/* Welches Programm dahintersteht, erfährt die Oberfläche nur auf Nachfrage – einmal je
+	 * Fenster ohne Besitzer (Hauptfenster, keine Menüs oder Dialoge). */
+	if (created && (copy.view.ownerId == 0) && rr->fe.WindowProcess)
+		rr_rail_request_process(rr, copy.view.id);
+
 	rr_window_copy_free(&copy);
 	return rc;
 }
@@ -773,6 +781,44 @@ static void rr_rail_exec_next(rrContext* rr)
 	}
 }
 
+/* Wie client_rail_server_start_cmd, aber ohne Startbefehl (/retina-remoteapp): Client-Status,
+ * Sprachleiste und Systemparameter. */
+static UINT rr_rail_client_info(rrContext* rr)
+{
+	rdpSettings* settings = rr->common.context.settings;
+	RailClientContext* rail = rr->rail;
+
+	RAIL_CLIENT_STATUS_ORDER status = { .flags = freerdp_settings_get_uint32(
+		                                    settings, FreeRDP_RemoteAppFeatureFlags) };
+	if (freerdp_settings_get_bool(settings, FreeRDP_AutoReconnectionEnabled))
+		status.flags |= TS_RAIL_CLIENTSTATUS_AUTORECONNECT;
+	else
+		status.flags &= ~TS_RAIL_CLIENTSTATUS_AUTORECONNECT;
+
+	UINT rc = rail->ClientInformation(rail, &status);
+	if (rc != CHANNEL_RC_OK)
+		return rc;
+
+	if (freerdp_settings_get_bool(settings, FreeRDP_RemoteAppLanguageBarSupported))
+	{
+		const RAIL_LANGBAR_INFO_ORDER langbar = { .languageBarStatus = 0x00000008 /* versteckt */ };
+		rc = rail->ClientLanguageBarInfo(rail, &langbar);
+		if ((rc != CHANNEL_RC_OK) && (rc != ERROR_BAD_CONFIGURATION))
+			return rc;
+	}
+
+	RAIL_SYSPARAM_ORDER sysparam = { 0 };
+	sysparam.params = SPI_MASK_SET_HIGH_CONTRAST | SPI_MASK_SET_MOUSE_BUTTON_SWAP |
+	                  SPI_MASK_SET_KEYBOARD_PREF | SPI_MASK_SET_DRAG_FULL_WINDOWS |
+	                  SPI_MASK_SET_KEYBOARD_CUES | SPI_MASK_SET_WORK_AREA;
+	sysparam.highContrast.flags = 0x7E;
+	sysparam.workArea.right =
+	    (UINT16)MIN(freerdp_settings_get_uint32(settings, FreeRDP_DesktopWidth), (UINT32)UINT16_MAX);
+	sysparam.workArea.bottom =
+	    (UINT16)MIN(freerdp_settings_get_uint32(settings, FreeRDP_DesktopHeight), (UINT32)UINT16_MAX);
+	return rail->ClientSystemParam(rail, &sysparam);
+}
+
 static UINT rr_rail_exec(rrContext* rr)
 {
 	rdpSettings* settings = rr->common.context.settings;
@@ -781,17 +827,27 @@ static UINT rr_rail_exec(rrContext* rr)
 		return CHANNEL_RC_OK;
 
 	const char* app = freerdp_settings_get_string(settings, FreeRDP_RemoteApplicationProgram);
-	if (!app || (*app == '\0'))
+	const BOOL withProgram = app && (*app != '\0');
+	if (!withProgram && !rr_option(rr, "retina-remoteapp"))
 		return CHANNEL_RC_OK;
 
 	EnterCriticalSection(&rr->railLock);
 	rr->railExecSent = TRUE;
-	rr->appPending = TRUE;
+	rr->appPending = withProgram;
 	rr->appSentAt = GetTickCount64();
 	LeaveCriticalSection(&rr->railLock);
-	WLog_Print(rr->log, WLOG_INFO, "starte RemoteApp %s", app);
 
-	const UINT rc = client_rail_server_start_cmd(rr->rail);
+	UINT rc = CHANNEL_RC_OK;
+	if (withProgram)
+	{
+		WLog_Print(rr->log, WLOG_INFO, "starte RemoteApp %s", app);
+		rc = client_rail_server_start_cmd(rr->rail);
+	}
+	else
+	{
+		WLog_Print(rr->log, WLOG_INFO, "RemoteApp-Sitzung ohne erstes Programm");
+		rc = rr_rail_client_info(rr);
+	}
 	if (rc != CHANNEL_RC_OK)
 		return rc;
 
@@ -812,6 +868,10 @@ static UINT rr_rail_exec(rrContext* rr)
 	}
 	else if ((rr->primary.workArea.width > 0) && (rr->primary.workArea.height > 0))
 		(void)rr_rail_work_area(rr, &rr->primary.workArea);
+
+	/* Ohne erstes Programm wartet keine Antwort: vorgemerkte Programme gleich starten. */
+	if (!withProgram)
+		rr_rail_exec_next(rr);
 	return CHANNEL_RC_OK;
 }
 
@@ -934,11 +994,56 @@ static UINT rr_rail_server_language_bar_info(RailClientContext* rail,
 	return CHANNEL_RC_OK;
 }
 
+static void rr_rail_request_process(rrContext* rr, UINT32 windowId)
+{
+	EnterCriticalSection(&rr->railLock);
+	RailClientContext* rail = rr->rail;
+	if (rail && rail->ClientGetAppIdRequest)
+	{
+		const RAIL_GET_APPID_REQ_ORDER request = { .windowId = windowId };
+		if (rail->ClientGetAppIdRequest(rail, &request) != CHANNEL_RC_OK)
+			WLog_Print(rr->log, WLOG_DEBUG, "Programm zu Fenster 0x%08" PRIX32 " nicht angefragt",
+			           windowId);
+	}
+	LeaveCriticalSection(&rr->railLock);
+}
+
+static void rr_rail_report_process(rrContext* rr, UINT32 windowId, const WCHAR* applicationId,
+                                   size_t applicationIdLength, const WCHAR* processName,
+                                   size_t processNameLength, UINT32 processId)
+{
+	char* id = ConvertWCharNToUtf8Alloc(applicationId, applicationIdLength, NULL);
+	char* name =
+	    processName ? ConvertWCharNToUtf8Alloc(processName, processNameLength, NULL) : NULL;
+
+	WLog_Print(rr->log, WLOG_DEBUG, "Fenster 0x%08" PRIX32 " gehört zu \"%s\" (%s, PID %" PRIu32 ")",
+	           windowId, id ? id : "", name ? name : "", processId);
+	if (rr->fe.WindowProcess)
+		(void)rr->fe.WindowProcess(rr, windowId, id ? id : "", name ? name : "", processId);
+	free(id);
+	free(name);
+}
+
 static UINT rr_rail_server_get_appid_response(RailClientContext* rail,
                                               const RAIL_GET_APPID_RESP_ORDER* response)
 {
-	WINPR_UNUSED(rail);
-	WINPR_UNUSED(response);
+	rrContext* rr = rr_from_rail(rail);
+
+	if (rr)
+		rr_rail_report_process(rr, response->windowId, response->applicationId,
+		                       ARRAYSIZE(response->applicationId), NULL, 0, 0);
+	return CHANNEL_RC_OK;
+}
+
+static UINT rr_rail_server_get_appid_response_ex(RailClientContext* rail,
+                                                 const RAIL_GET_APPID_RESP_EX* response)
+{
+	rrContext* rr = rr_from_rail(rail);
+
+	if (rr)
+		rr_rail_report_process(rr, response->windowID, response->applicationID,
+		                       ARRAYSIZE(response->applicationID), response->processImageName,
+		                       ARRAYSIZE(response->processImageName), response->processId);
 	return CHANNEL_RC_OK;
 }
 
@@ -1000,6 +1105,7 @@ BOOL rr_rail_init(rrContext* rr, RailClientContext* rail)
 	rail->ServerMinMaxInfo = rr_rail_server_min_max_info;
 	rail->ServerLanguageBarInfo = rr_rail_server_language_bar_info;
 	rail->ServerGetAppIdResponse = rr_rail_server_get_appid_response;
+	rail->ServerGetAppidResponseExtended = rr_rail_server_get_appid_response_ex;
 	rail->ServerZOrderSync = rr_rail_server_zorder_sync;
 	rail->ServerCloak = rr_rail_server_cloak;
 	rail->ServerPowerDisplayRequest = rr_rail_server_power_display_request;

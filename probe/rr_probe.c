@@ -18,8 +18,11 @@
  *                               (lokales Verschieben, wenn der Server es startet)
  *   move SEL X,Y | resize SEL W,H
  *   minimize|maximize|restore|close|activate SEL
+ *   app SPEC                    weiteres Programm in derselben Sitzung (wie /app:)
  *   key SCANCODE | type TEXT | size WxH | dump NAME | state | stats | quit
  * SEL: top (aktives Fenster), 0x<id> oder title=<Teil des Titels>
+ *
+ * Zu jedem neuen Hauptfenster protokolliert „PROGRAMM“ die App-ID, die der Server meldet.
  */
 #include <ctype.h>
 #include <signal.h>
@@ -400,6 +403,14 @@ static BOOL on_window_surface(rrContext* rr, UINT32 windowId, const BYTE* data, 
 static void on_window_surface_unmapped(rrContext* rr, UINT32 windowId)
 {
 	probe_log(rr_user(rr), "FLÄCHE LOS 0x%08X", windowId);
+}
+
+static BOOL on_window_process(rrContext* rr, UINT32 windowId, const char* applicationId,
+                              const char* processName, UINT32 processId)
+{
+	probe_log(rr_user(rr), "PROGRAMM 0x%08X id=\"%s\" prozess=\"%s\" pid=%u", windowId,
+	          applicationId, processName, processId);
+	return TRUE;
 }
 
 static BOOL on_local_move_size(rrContext* rr, UINT32 windowId, BOOL start, UINT16 type, INT32 x,
@@ -891,6 +902,7 @@ int main(int argc, char* argv[])
 	frontend.MinMaxInfo = on_min_max_info;
 	frontend.WindowCloak = on_window_cloak;
 	frontend.PointerNew = on_pointer_new;
+	frontend.WindowProcess = on_window_process;
 
 	p->start = GetTickCount64();
 	InitializeCriticalSection(&p->lock);

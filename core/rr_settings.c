@@ -110,6 +110,22 @@ BOOL rr_settings_parse(rrContext* rr, int argc, char** argv, int* exitCode)
 		goto fail;
 	}
 
+	/* /retina-remoteapp: RemoteApp-Modus ohne erstes Programm – dieselben Schalter wie /app:
+	 * (FreeRDP parse_app_option_program), nur ohne RemoteApplicationProgram. */
+	if (rr_option(rr, "retina-remoteapp") &&
+	    !freerdp_settings_get_bool(settings, FreeRDP_RemoteApplicationMode))
+	{
+		const FreeRDP_Settings_Keys_Bool ids[] = { FreeRDP_RemoteApplicationMode,
+			                                       FreeRDP_RemoteAppLanguageBarSupported,
+			                                       FreeRDP_Workarea, FreeRDP_DisableWallpaper,
+			                                       FreeRDP_DisableFullWindowDrag };
+		for (size_t i = 0; i < ARRAYSIZE(ids); i++)
+		{
+			if (!freerdp_settings_set_bool(settings, ids[i], TRUE))
+				goto fail;
+		}
+	}
+
 	free(args);
 	*exitCode = 0;
 	return TRUE;

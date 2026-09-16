@@ -146,6 +146,23 @@ extern "C"
 		/* Kanäle, die der Kern nicht selbst bedient (z.B. cliprdr für die Zwischenablage). */
 		void (*ChannelConnected)(rrContext* rr, const char* name, void* iface);
 		void (*ChannelDisconnected)(rrContext* rr, const char* name, void* iface);
+
+		/* Anmeldedaten fehlen (NULL: Abfrage im Terminal wie bei xfreerdp). Die Zeichenketten
+		 * sind mit malloc angelegt; wer eine ersetzt, gibt die alte mit free frei. FALSE bricht
+		 * die Verbindung ab. */
+		BOOL (*Authenticate)(rrContext* rr, char** username, char** password, char** domain,
+		                     rdp_auth_reason reason);
+		/* Serverzertifikat bestätigen (NULL: im Terminal). oldFingerprint ist NULL beim ersten
+		 * Kontakt und gesetzt, wenn sich das Zertifikat geändert hat. Rückgabe: 0 ablehnen,
+		 * 1 annehmen und merken, 2 nur für diese Verbindung. */
+		DWORD (*VerifyCertificate)(rrContext* rr, const char* host, UINT16 port,
+		                           const char* commonName, const char* subject, const char* issuer,
+		                           const char* fingerprint, const char* oldFingerprint, DWORD flags);
+		/* Programm hinter einem RemoteApp-Fenster (MS-RDPERP Get Application ID), angefragt für
+		 * jedes neue Fenster ohne Besitzer. processName ist der Pfad der .exe, sofern der Server
+		 * die erweiterte Antwort schickt, sonst "". */
+		BOOL (*WindowProcess)(rrContext* rr, UINT32 windowId, const char* applicationId,
+		                      const char* processName, UINT32 processId);
 	} rrFrontend;
 
 	/* ---- Lebenszyklus ---------------------------------------------------------------- */
@@ -238,7 +255,11 @@ extern "C"
 	/* Weiteres Programm in derselben Sitzung starten, Angabe wie bei /app:
 	 * ("program:||notepad,cmd:datei.txt" oder "||notepad"). Windows erlaubt je Benutzer nur
 	 * eine Sitzung, eine zweite Verbindung würde die erste verdrängen. Vor dem Verbindungsaufbau
-	 * aufgerufen, startet das Programm nach dem ersten. */
+	 * aufgerufen, startet das Programm nach dem ersten.
+	 *
+	 * Mit /retina-remoteapp statt /app: verbindet der Kern im RemoteApp-Modus ohne erstes
+	 * Programm. Fenster, die in der Sitzung noch laufen, erscheinen trotzdem; Programme folgen
+	 * über rr_rail_launch, sobald der Kanal steht. */
 	BOOL rr_rail_launch(rrContext* rr, const char* app);
 
 #ifdef __cplusplus

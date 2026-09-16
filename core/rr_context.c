@@ -390,6 +390,48 @@ out:
 	return 0;
 }
 
+/* ---- Anmeldung und Zertifikat: Oberfläche, sonst Terminal ------------------------------ */
+
+static BOOL rr_authenticate(freerdp* instance, char** username, char** password, char** domain,
+                            rdp_auth_reason reason)
+{
+	rrContext* rr = (rrContext*)instance->context;
+
+	if (rr && rr->fe.Authenticate)
+		return rr->fe.Authenticate(rr, username, password, domain, reason);
+	return client_cli_authenticate_ex(instance, username, password, domain, reason);
+}
+
+static DWORD rr_verify_certificate(freerdp* instance, const char* host, UINT16 port,
+                                   const char* commonName, const char* subject, const char* issuer,
+                                   const char* fingerprint, DWORD flags)
+{
+	rrContext* rr = (rrContext*)instance->context;
+
+	if (rr && rr->fe.VerifyCertificate)
+		return rr->fe.VerifyCertificate(rr, host, port, commonName, subject, issuer, fingerprint,
+		                                NULL, flags);
+	return client_cli_verify_certificate_ex(instance, host, port, commonName, subject, issuer,
+	                                        fingerprint, flags);
+}
+
+static DWORD rr_verify_changed_certificate(freerdp* instance, const char* host, UINT16 port,
+                                           const char* commonName, const char* subject,
+                                           const char* issuer, const char* fingerprint,
+                                           const char* oldSubject, const char* oldIssuer,
+                                           const char* oldFingerprint, DWORD flags)
+{
+	rrContext* rr = (rrContext*)instance->context;
+
+	if (rr && rr->fe.VerifyCertificate)
+		return rr->fe.VerifyCertificate(rr, host, port, commonName, subject, issuer, fingerprint,
+		                                oldFingerprint ? oldFingerprint : "",
+		                                flags | VERIFY_CERT_FLAG_CHANGED);
+	return client_cli_verify_changed_certificate_ex(instance, host, port, commonName, subject,
+	                                                issuer, fingerprint, oldSubject, oldIssuer,
+	                                                oldFingerprint, flags);
+}
+
 /* ---- Einstiegspunkte für FreeRDP ----------------------------------------------------- */
 
 static BOOL rr_client_new(freerdp* instance, rdpContext* context)
@@ -400,9 +442,9 @@ static BOOL rr_client_new(freerdp* instance, rdpContext* context)
 	instance->PreConnect = rr_pre_connect;
 	instance->PostConnect = rr_post_connect;
 	instance->PostDisconnect = rr_post_disconnect;
-	instance->AuthenticateEx = client_cli_authenticate_ex;
-	instance->VerifyCertificateEx = client_cli_verify_certificate_ex;
-	instance->VerifyChangedCertificateEx = client_cli_verify_changed_certificate_ex;
+	instance->AuthenticateEx = rr_authenticate;
+	instance->VerifyCertificateEx = rr_verify_certificate;
+	instance->VerifyChangedCertificateEx = rr_verify_changed_certificate;
 	instance->LogonErrorInfo = client_cli_logon_error_info;
 	instance->PresentGatewayMessage = client_cli_present_gateway_message;
 
